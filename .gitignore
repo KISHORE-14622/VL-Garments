@@ -1,0 +1,57 @@
+# -----------------
+# Flutter / Dart
+# -----------------
+.dart_tool/
+.packages
+.pub/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-versions
+generated_plugin_registrant.dart
+*.lock
+*.log
+
+# Platform builds
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/.last_build_id
+android/.gradle/
+android/app/build/
+macos/Pods/
+windows/flutter/ephemeral/
+linux/flutter/ephemeral/
+web/.dart_tool/
+web/build/
+
+# -----------------
+# Node.js / Express (backend)
+# -----------------
+backend/node_modules/
+backend/.env
+backend/.DS_Store
+backend/logs/
+backend/debug.log
+backend/npm-debug.log
+backend/yarn-error.log
+backend/dist/
+
+# -----------------
+# Common ignores
+# -----------------
+node_modules/
+.DS_Store
+Thumbs.db
+.env
+*.tmp
+*.swp
+*.lock
+.vscode/
+.idea/
+*.iml
+
+# -----------------
+# Coverage & Tests
+# -----------------
+coverage/
+test/coverage/

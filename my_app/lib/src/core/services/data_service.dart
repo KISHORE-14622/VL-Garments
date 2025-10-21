@@ -9,15 +9,96 @@ import '../models/staff.dart';
 import '../models/worker.dart';
 
 class DataService {
-  final List<ProductCategory> categories = [
-    const ProductCategory(id: 'shirt', name: 'Shirt'),
-    const ProductCategory(id: 'pant', name: 'Pant'),
-  ];
+  final List<ProductCategory> categories = [];
 
-  final Map<String, double> ratePerCategory = {
-    'shirt': 50.0,
-    'pant': 60.0,
-  };
+  final Map<String, double> ratePerCategory = {};
+
+  // Fetch rates from backend and build categories list
+  Future<void> fetchRates() async {
+    try {
+      final url = '${dotenv.env['API_URL']}/rates';
+      print('Fetching rates from: $url');
+      final response = await http.get(Uri.parse(url));
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        ratePerCategory.clear();
+        categories.clear();
+        
+        for (var item in data) {
+          final categoryId = item['category'] as String;
+          final amount = (item['amount'] as num).toDouble();
+          
+          ratePerCategory[categoryId] = amount;
+          
+          // Build category from ID (capitalize first letter)
+          final categoryName = categoryId.split('_')
+              .map((word) => word[0].toUpperCase() + word.substring(1))
+              .join(' ');
+          
+          categories.add(ProductCategory(
+            id: categoryId,
+            name: categoryName,
+          ));
+        }
+        
+        print('✅ Fetched ${categories.length} categories with rates: $ratePerCategory');
+      } else {
+        print('❌ Failed to fetch rates: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error fetching rates: $e');
+      print('Stack trace: $stackTrace');
+    }
+  }
+
+  // Update rate in backend
+  Future<bool> updateRate(String category, double amount) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/rates';
+      print('Updating rate: $url');
+      print('Category: $category, Amount: $amount');
+      
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'category': category,
+          'amount': amount,
+        }),
+      );
+      
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // Update local rate
+        ratePerCategory[category] = amount;
+        
+        // Add category if it doesn't exist
+        final categoryExists = categories.any((c) => c.id == category);
+        if (!categoryExists) {
+          final categoryName = category.split('_')
+              .map((word) => word[0].toUpperCase() + word.substring(1))
+              .join(' ');
+          categories.add(ProductCategory(
+            id: category,
+            name: categoryName,
+          ));
+          print('✅ Added new category: $categoryName');
+        }
+        
+        print('✅ Updated rate for $category: $amount');
+        return true;
+      } else {
+        print('❌ Failed to update rate: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error updating rate: $e');
+      print('Stack trace: $stackTrace');
+    }
+    return false;
+  }
 
   final List<Product> products = [];
   final List<StitchEntry> stitchEntries = [];
@@ -197,6 +278,122 @@ class DataService {
   // Get active workers
   List<Worker> getActiveWorkers() {
     return workers.where((w) => w.isActive).toList();
+  }
+
+  // Fetch stitch entries from backend
+  Future<void> fetchStitchEntries() async {
+    try {
+      final url = '${dotenv.env['API_URL']}/stitch-entries';
+      print('Fetching stitch entries from: $url');
+      final response = await http.get(Uri.parse(url));
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        stitchEntries.clear();
+        for (var item in data) {
+          // Extract workerId - backend may return it as an object with _id field
+          final workerIdValue = item['workerId'];
+          final workerId = workerIdValue is String 
+              ? workerIdValue 
+              : workerIdValue['_id'] as String;
+          
+          stitchEntries.add(StitchEntry(
+            id: item['_id'],
+            workerId: workerId,
+            categoryId: item['categoryId'],
+            quantity: item['quantity'],
+            date: DateTime.parse(item['date']),
+          ));
+        }
+        print('✅ Fetched ${stitchEntries.length} stitch entries');
+      } else {
+        print('❌ Failed to fetch stitch entries: ${response.statusCode}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error fetching stitch entries: $e');
+      print('Stack trace: $stackTrace');
+    }
+  }
+
+  // Add stitch entry to backend
+  Future<StitchEntry?> addStitchEntry(StitchEntry entry) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/stitch-entries';
+      print('Adding stitch entry to: $url');
+      print('Worker: ${entry.workerId}, Category: ${entry.categoryId}, Quantity: ${entry.quantity}');
+      
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'workerId': entry.workerId,
+          'categoryId': entry.categoryId,
+          'quantity': entry.quantity,
+          'date': entry.date.toIso8601String(),
+        }),
+      );
+      
+      print('Response status: ${response.statusCode}');
+      print('Response body: ${response.body}');
+      
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        
+        // Extract workerId - backend returns it as an object with _id field
+        final workerIdValue = data['workerId'];
+        final workerId = workerIdValue is String 
+            ? workerIdValue 
+            : workerIdValue['_id'] as String;
+        
+        final savedEntry = StitchEntry(
+          id: data['_id'],
+          workerId: workerId,
+          categoryId: data['categoryId'],
+          quantity: data['quantity'],
+          date: DateTime.parse(data['date']),
+        );
+        stitchEntries.add(savedEntry);
+        print('✅ Stitch entry added successfully');
+        return savedEntry;
+      } else {
+        print('❌ Failed to add stitch entry: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error adding stitch entry: $e');
+      print('Stack trace: $stackTrace');
+    }
+    return null;
+  }
+
+  // Get total revenue (all entries)
+  Future<double> getTotalRevenue() async {
+    try {
+      final url = '${dotenv.env['API_URL']}/stitch-entries/total-revenue';
+      final response = await http.get(Uri.parse(url));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return (data['totalRevenue'] as num).toDouble();
+      }
+    } catch (e) {
+      print('Error fetching total revenue: $e');
+    }
+    return 0.0;
+  }
+
+  // Get weekly statistics
+  Future<Map<String, dynamic>> getWeeklyStats() async {
+    try {
+      final url = '${dotenv.env['API_URL']}/stitch-entries/weekly-stats';
+      final response = await http.get(Uri.parse(url));
+      
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print('Error fetching weekly stats: $e');
+    }
+    return {};
   }
 }
 

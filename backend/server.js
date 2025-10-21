@@ -14,6 +14,7 @@ import paymentRoutes from './routes/payments.js';
 import inventoryRoutes from './routes/inventory.js';
 import staffRoutes from './routes/staff.js';
 import workerRoutes from './routes/workers.js';
+import stitchEntryRoutes from './routes/stitchEntries.js';
 
 const app = express();
 
@@ -31,6 +32,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/workers', workerRoutes);
+app.use('/api/stitch-entries', stitchEntryRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.json({ ok: true }));

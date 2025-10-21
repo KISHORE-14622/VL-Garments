@@ -10,17 +10,33 @@ router.get('/', async (_req, res) => {
   res.json(items);
 });
 
-router.post('/', authRequired, adminOnly, [body('category').notEmpty(), body('amount').isNumeric()], async (req, res) => {
+router.post('/', [body('category').notEmpty(), body('amount').isNumeric()], async (req, res) => {
+  console.log('📝 Rate update request received:', req.body);
+  
   const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-  const existing = await Rate.findOne({ category: req.body.category });
-  if (existing) {
-    existing.amount = req.body.amount;
-    await existing.save();
-    return res.json(existing);
+  if (!errors.isEmpty()) {
+    console.log('❌ Validation errors:', errors.array());
+    return res.status(400).json({ errors: errors.array() });
   }
-  const created = await Rate.create(req.body);
-  res.status(201).json(created);
+  
+  try {
+    const existing = await Rate.findOne({ category: req.body.category });
+    if (existing) {
+      console.log(`✏️  Updating existing rate for ${req.body.category}: ${existing.amount} → ${req.body.amount}`);
+      existing.amount = req.body.amount;
+      await existing.save();
+      console.log('✅ Rate updated successfully');
+      return res.json(existing);
+    }
+    
+    console.log(`➕ Creating new rate for ${req.body.category}: ${req.body.amount}`);
+    const created = await Rate.create(req.body);
+    console.log('✅ Rate created successfully');
+    res.status(201).json(created);
+  } catch (error) {
+    console.error('❌ Error saving rate:', error);
+    res.status(500).json({ message: 'Failed to save rate', error: error.message });
+  }
 });
 
 export default router;

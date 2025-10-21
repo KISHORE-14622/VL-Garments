@@ -30,17 +30,23 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    if (widget.dataService.categories.isNotEmpty) {
-      _selectedCategory = widget.dataService.categories.first.id;
-    }
     _loadStaffData();
   }
 
   Future<void> _loadStaffData() async {
     setState(() => _isLoadingWorkers = true);
-    await widget.dataService.fetchWorkers();
+    await Future.wait([
+      widget.dataService.fetchRates(), // Load rates and categories
+      widget.dataService.fetchWorkers(),
+    ]);
     if (mounted) {
-      setState(() => _isLoadingWorkers = false);
+      setState(() {
+        _isLoadingWorkers = false;
+        // Set default category after rates are loaded
+        if (widget.dataService.categories.isNotEmpty) {
+          _selectedCategory = widget.dataService.categories.first.id;
+        }
+      });
     }
   }
 
@@ -54,13 +60,25 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
   List<StitchEntry> _getFilteredEntries() {
     if (_selectedWorkerId == null) return [];
     
-    final myEntries = widget.dataService.stitchEntries.where((e) => e.workerId == _selectedWorkerId).toList();
+    print('🔍 Filtering entries:');
+    print('Selected worker ID: $_selectedWorkerId');
+    print('Total entries in service: ${widget.dataService.stitchEntries.length}');
+    
+    final myEntries = widget.dataService.stitchEntries.where((e) {
+      print('Entry workerId: ${e.workerId}, matches: ${e.workerId == _selectedWorkerId}');
+      return e.workerId == _selectedWorkerId;
+    }).toList();
+    
+    print('Entries for this worker: ${myEntries.length}');
+    
     final now = DateTime.now();
     
     switch (_selectedPeriod) {
       case 'today':
         final today = DateTime(now.year, now.month, now.day);
-        return myEntries.where((e) => e.date.isAfter(today)).toList();
+        final filtered = myEntries.where((e) => e.date.isAfter(today)).toList();
+        print('Today filter: ${filtered.length} entries');
+        return filtered;
       case 'week':
         final weekAgo = now.subtract(const Duration(days: 7));
         return myEntries.where((e) => e.date.isAfter(weekAgo)).toList();
@@ -108,6 +126,11 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
         body: activeWorkers.isEmpty
             ? _buildNoWorkersState()
             : _buildWorkerSelector(activeWorkers),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _showAddWorkerDialog,
+          icon: const Icon(Icons.add),
+          label: const Text('Add Worker'),
+        ),
       );
     }
     
@@ -226,24 +249,32 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: DropdownButton<String>(
-                    value: _selectedCategory,
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    items: widget.dataService.categories
-                        .map((c) => DropdownMenuItem(
-                              value: c.id,
-                              child: Row(
-                                children: [
-                                  Icon(Icons.category, color: Theme.of(context).primaryColor, size: 20),
-                                  const SizedBox(width: 12),
-                                  Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (v) => setState(() => _selectedCategory = v ?? _selectedCategory),
-                  ),
+                  child: widget.dataService.categories.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: Text(
+                            'Loading categories...',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        )
+                      : DropdownButton<String>(
+                          value: _selectedCategory,
+                          isExpanded: true,
+                          underline: const SizedBox(),
+                          items: widget.dataService.categories
+                              .map((c) => DropdownMenuItem(
+                                    value: c.id,
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.category, color: Theme.of(context).primaryColor, size: 20),
+                                        const SizedBox(width: 12),
+                                        Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ))
+                              .toList(),
+                          onChanged: (v) => setState(() => _selectedCategory = v ?? _selectedCategory),
+                        ),
                 ),
                 const SizedBox(height: 20),
                 
@@ -880,9 +911,21 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
             ),
             const SizedBox(height: 8),
             Text(
-              'Please contact admin to add workers',
+              'Add workers to start tracking production',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _showAddWorkerDialog,
+              icon: const Icon(Icons.add),
+              label: const Text('Add Worker'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
           ],
         ),
@@ -890,7 +933,124 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
     );
   }
 
-  void _addEntry() {
+  void _showAddWorkerDialog() {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final addressController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Worker'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Worker Name *',
+                  hintText: 'e.g., Ravi Kumar',
+                  border: OutlineInputBorder(),
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: phoneController,
+                decoration: const InputDecoration(
+                  labelText: 'Phone Number *',
+                  hintText: 'e.g., 9876543210',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(
+                  labelText: 'Address (Optional)',
+                  hintText: 'e.g., Chennai',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              final phone = phoneController.text.trim();
+              final address = addressController.text.trim();
+
+              if (name.isEmpty || phone.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please fill in name and phone number'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+
+              Navigator.pop(context);
+
+              // Show loading
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Adding worker...'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+
+              final worker = Worker(
+                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                name: name,
+                phoneNumber: phone,
+                address: address,
+                joinedDate: DateTime.now(),
+                isActive: true,
+              );
+
+              final added = await widget.dataService.addWorker(worker);
+
+              if (added != null) {
+                await _loadStaffData();
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Worker "$name" added successfully!'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } else {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to add worker'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addEntry() async {
     if (_selectedWorkerId == null) return;
     
     final qty = int.tryParse(_qtyController.text) ?? 0;
@@ -904,32 +1064,59 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
       return;
     }
     
-    widget.dataService.stitchEntries.add(
-      StitchEntry(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        workerId: _selectedWorkerId!,
-        categoryId: _selectedCategory,
-        quantity: qty,
-        date: DateTime.now(),
-      ),
-    );
-    
-    setState(() {
-      _qtyController.text = '1';
-    });
-    
-    final worker = widget.dataService.getWorkerById(_selectedWorkerId!);
-    final categoryName = widget.dataService.categories
-        .firstWhere((c) => c.id == _selectedCategory, orElse: () => widget.dataService.categories.first)
-        .name;
-    
+    // Show loading
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${worker?.name ?? "Worker"}: Added $qty $categoryName(s) successfully!'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
+      const SnackBar(
+        content: Text('Saving entry...'),
+        duration: Duration(seconds: 1),
       ),
     );
+    
+    // Create entry
+    final entry = StitchEntry(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      workerId: _selectedWorkerId!,
+      categoryId: _selectedCategory,
+      quantity: qty,
+      date: DateTime.now(),
+    );
+    
+    // Save to backend
+    final savedEntry = await widget.dataService.addStitchEntry(entry);
+    
+    if (savedEntry != null) {
+      final worker = widget.dataService.getWorkerById(_selectedWorkerId!);
+      final categoryName = widget.dataService.categories
+          .firstWhere((c) => c.id == _selectedCategory, orElse: () => widget.dataService.categories.first)
+          .name;
+      final rate = widget.dataService.ratePerCategory[_selectedCategory] ?? 0;
+      final earnings = qty * rate;
+      
+      // Update UI - reset quantity and refresh entries list
+      if (mounted) {
+        setState(() {
+          _qtyController.text = '1';
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${worker?.name ?? "Worker"}: Added $qty $categoryName(s) - ₹${earnings.toStringAsFixed(0)} earned!'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to save entry. Please try again.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 }
 

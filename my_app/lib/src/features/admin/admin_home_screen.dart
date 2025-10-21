@@ -20,11 +20,42 @@ class AdminHomeScreen extends StatefulWidget {
 }
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    await Future.wait([
+      widget.dataService.fetchRates(),
+      widget.dataService.fetchStaff(),
+      widget.dataService.fetchWorkers(),
+      widget.dataService.fetchStitchEntries(), // Load stitch entries
+    ]);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final totalWorkers = widget.dataService.stitchEntries.map((e) => e.workerId).toSet().length;
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          elevation: 0,
+          title: const Text('Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    final totalWorkers = widget.dataService.workers.where((w) => w.isActive).length;
     final totalProduction = widget.dataService.stitchEntries.fold<int>(0, (sum, e) => sum + e.quantity);
-    final totalRevenue = widget.dataService.payments.fold<double>(0, (sum, p) => sum + p.amount);
+    final totalRevenue = widget.dataService.calculateAmountForEntries(widget.dataService.stitchEntries);
     final pendingPayments = widget.dataService.payments.where((p) => p.status.toString().contains('pending')).length;
 
     return Scaffold(
@@ -73,7 +104,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   context,
                   icon: Icons.people_outline,
                   title: 'Total Staff',
-                  value: totalStaff.toString(),
+                  value: totalWorkers.toString(),
                   color: Colors.blue,
                 ),
                 _buildStatCard(

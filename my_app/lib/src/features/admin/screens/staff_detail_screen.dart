@@ -44,8 +44,10 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final worker = widget.dataService.getWorkerById(widget.workerId);
-    final workerName = worker?.name ?? widget.workerId;
+    // Try to get staff first, then fall back to worker
+    final staff = widget.dataService.getStaffById(widget.workerId);
+    final worker = staff == null ? widget.dataService.getWorkerById(widget.workerId) : null;
+    final workerName = staff?.name ?? worker?.name ?? widget.workerId;
     
     final filteredEntries = _getFilteredEntries();
     final totalProduction = filteredEntries.fold<int>(0, (sum, e) => sum + e.quantity);
@@ -76,7 +78,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: Text(staffName),
+        title: Text(workerName),
         elevation: 0,
         actions: [
           IconButton(
@@ -122,7 +124,7 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
                     radius: 40,
                     backgroundColor: Colors.white,
                     child: Text(
-                      staffName.substring(0, 1).toUpperCase(),
+                      workerName.substring(0, 1).toUpperCase(),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).primaryColor,
@@ -143,21 +145,21 @@ class _StaffDetailScreenState extends State<StaffDetailScreen> {
                           ),
                         ),
                         Text(
-                          staffName,
+                          workerName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        if (staff != null) ...[
+                        if (worker != null) ...[
                           const SizedBox(height: 4),
                           Row(
                             children: [
                               const Icon(Icons.phone, color: Colors.white70, size: 14),
                               const SizedBox(width: 4),
                               Text(
-                                staff.phoneNumber,
+                                worker.phoneNumber,
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 12,

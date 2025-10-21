@@ -69,7 +69,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
                 Expanded(
                   child: _buildStatCard(
                     'Active Staff',
-                    uniqueStaff.toString(),
+                    uniqueWorkers.toString(),
                     Icons.people,
                     Colors.green,
                   ),

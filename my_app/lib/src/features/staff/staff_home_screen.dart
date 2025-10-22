@@ -25,6 +25,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
   late TabController _tabController;
   String? _selectedWorkerId;
   bool _isLoadingWorkers = true;
+  String _workerQuery = '';
 
   @override
   void initState() {
@@ -35,10 +36,14 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
 
   Future<void> _loadStaffData() async {
     setState(() => _isLoadingWorkers = true);
-    await Future.wait([
-      widget.dataService.fetchRates(), // Load rates and categories
-      widget.dataService.fetchWorkers(),
-    ]);
+    await widget.dataService.fetchWorkers();
+    await widget.dataService.fetchWorkerCategories();
+    try {
+      await widget.dataService.syncRatesFromServer();
+    } catch (_) {}
+    try {
+      await widget.dataService.fetchMyProduction();
+    } catch (_) {}
     if (mounted) {
       setState(() {
         _isLoadingWorkers = false;
@@ -57,19 +62,43 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
     super.dispose();
   }
 
+  void _showAccountDetails() {
+    final u = widget.user;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('My Account'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [const Icon(Icons.badge), const SizedBox(width: 8), Expanded(child: Text(u.name))]),
+            const SizedBox(height: 8),
+            Row(children: [const Icon(Icons.email), const SizedBox(width: 8), Expanded(child: Text(u.email))]),
+            const SizedBox(height: 8),
+            Row(children: [const Icon(Icons.verified_user), const SizedBox(width: 8), Expanded(child: Text(_roleText(u.role)))]),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  String _roleText(UserRole role) {
+    final parts = role.toString().split('.');
+    return parts.isNotEmpty ? parts.last : role.toString();
+  }
+
   List<StitchEntry> _getFilteredEntries() {
     if (_selectedWorkerId == null) return [];
     
-    print('🔍 Filtering entries:');
-    print('Selected worker ID: $_selectedWorkerId');
-    print('Total entries in service: ${widget.dataService.stitchEntries.length}');
+    // debug: filtering entries (removed prints for production)
     
-    final myEntries = widget.dataService.stitchEntries.where((e) {
-      print('Entry workerId: ${e.workerId}, matches: ${e.workerId == _selectedWorkerId}');
-      return e.workerId == _selectedWorkerId;
-    }).toList();
+    final myEntries = widget.dataService.stitchEntries.where((e) => e.workerId == _selectedWorkerId).toList();
     
-    print('Entries for this worker: ${myEntries.length}');
+    // debug: entries count removed
     
     final now = DateTime.now();
     
@@ -117,6 +146,11 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
           elevation: 0,
           actions: [
             IconButton(
+              onPressed: _showAccountDetails,
+              icon: const Icon(Icons.account_circle),
+              tooltip: 'My Account',
+            ),
+            IconButton(
               onPressed: () => widget.authService.signOut(),
               icon: const Icon(Icons.logout),
               tooltip: 'Logout',
@@ -128,7 +162,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
             : _buildWorkerSelector(activeWorkers),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _showAddWorkerDialog,
-          icon: const Icon(Icons.add),
+          icon: const Icon(Icons.person_add),
           label: const Text('Add Worker'),
         ),
       );
@@ -205,14 +239,14 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [Theme.of(context).primaryColor, Theme.of(context).primaryColor.withOpacity(0.7)],
+                colors: [Theme.of(context).primaryColor, Theme.of(context).primaryColor.withValues(alpha: 0.7)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                  color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
@@ -257,10 +291,9 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
                             style: TextStyle(color: Colors.grey),
                           ),
                         )
-                      : DropdownButton<String>(
-                          value: _selectedCategory,
+                      : DropdownButtonFormField<String>(
+                          initialValue: _selectedCategory,
                           isExpanded: true,
-                          underline: const SizedBox(),
                           items: widget.dataService.categories
                               .map((c) => DropdownMenuItem(
                                     value: c.id,
@@ -490,7 +523,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
         });
       },
       backgroundColor: Colors.white,
-      selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
+      selectedColor: Theme.of(context).primaryColor.withValues(alpha: 0.2),
       checkmarkColor: Theme.of(context).primaryColor,
     );
   }
@@ -504,7 +537,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -515,7 +548,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 28),
@@ -554,7 +587,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -644,7 +677,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.blue.withOpacity(0.1),
+              color: Colors.blue.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.inventory_2, color: Colors.blue, size: 24),
@@ -742,6 +775,12 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
   }
 
   Widget _buildWorkerSelector(List<Worker> workerList) {
+    final filtered = _workerQuery.trim().isEmpty
+        ? workerList
+        : workerList.where((w) {
+            final q = _workerQuery.toLowerCase();
+            return w.name.toLowerCase().contains(q) || w.phoneNumber.toLowerCase().contains(q);
+          }).toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -753,7 +792,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
               gradient: LinearGradient(
                 colors: [
                   Theme.of(context).primaryColor,
-                  Theme.of(context).primaryColor.withOpacity(0.7),
+                  Theme.of(context).primaryColor.withValues(alpha: 0.7),
                 ],
               ),
               borderRadius: BorderRadius.circular(20),
@@ -789,6 +828,15 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
             ),
           ),
           const SizedBox(height: 24),
+          // Search workers
+          TextField(
+            decoration: InputDecoration(
+              hintText: 'Search workers by name or phone',
+              prefixIcon: const Icon(Icons.search),
+            ),
+            onChanged: (v) => setState(() => _workerQuery = v),
+          ),
+          const SizedBox(height: 16),
           Text(
             'Workers',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -797,28 +845,36 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
                 ),
           ),
           const SizedBox(height: 16),
-          ...workerList.map((worker) {
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  _selectedWorkerId = worker.id;
-                });
-              },
-              borderRadius: BorderRadius.circular(16),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
+          if (filtered.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text('No workers found', style: TextStyle(color: Colors.grey[600])),
+              ),
+            )
+          else
+            ...filtered.map((worker) {
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedWorkerId = worker.id;
+                  });
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
                 child: Row(
                   children: [
                     Container(
@@ -827,7 +883,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
                         gradient: LinearGradient(
                           colors: [
                             Theme.of(context).primaryColor,
-                            Theme.of(context).primaryColor.withOpacity(0.7),
+                            Theme.of(context).primaryColor.withValues(alpha: 0.7),
                           ],
                         ),
                         shape: BoxShape.circle,
@@ -874,14 +930,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
-                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
                   ],
                 ),
               ),
@@ -915,17 +965,11 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[600]),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _showAddWorkerDialog,
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.person_add),
               label: const Text('Add Worker'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
             ),
           ],
         ),
@@ -937,120 +981,174 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
     final addressController = TextEditingController();
-
+    bool isLoading = false;
+    String? selectedCategoryId = widget.dataService.workerCategories.isNotEmpty
+        ? widget.dataService.workerCategories.first.id
+        : null;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Worker'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Worker Name *',
-                  hintText: 'e.g., Ravi Kumar',
-                  border: OutlineInputBorder(),
-                ),
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: phoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Phone Number *',
-                  hintText: 'e.g., 9876543210',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: addressController,
-                decoration: const InputDecoration(
-                  labelText: 'Address (Optional)',
-                  hintText: 'e.g., Chennai',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 2,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final name = nameController.text.trim();
-              final phone = phoneController.text.trim();
-              final address = addressController.text.trim();
-
-              if (name.isEmpty || phone.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please fill in name and phone number'),
-                    backgroundColor: Colors.red,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Worker'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Worker Name *',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person),
                   ),
-                );
-                return;
-              }
-
-              Navigator.pop(context);
-
-              // Show loading
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Adding worker...'),
-                  duration: Duration(seconds: 1),
+                  textCapitalization: TextCapitalization.words,
                 ),
-              );
-
-              final worker = Worker(
-                id: DateTime.now().millisecondsSinceEpoch.toString(),
-                name: name,
-                phoneNumber: phone,
-                address: address,
-                joinedDate: DateTime.now(),
-                isActive: true,
-              );
-
-              final added = await widget.dataService.addWorker(worker);
-
-              if (added != null) {
-                await _loadStaffData();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Worker "$name" added successfully!'),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone Number *',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.phone),
+                  ),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: addressController,
+                  decoration: const InputDecoration(
+                    labelText: 'Address (Optional)',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.home),
+                  ),
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Category', style: Theme.of(context).textTheme.bodySmall),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: selectedCategoryId,
+                        items: widget.dataService.workerCategories
+                            .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                            .toList(),
+                        onChanged: (v) => setDialogState(() => selectedCategoryId = v),
+                        decoration: const InputDecoration(border: OutlineInputBorder()),
+                      ),
                     ),
-                  );
-                }
-              } else {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Failed to add worker'),
-                      backgroundColor: Colors.red,
-                      behavior: SnackBarBehavior.floating,
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Add Category',
+                      onPressed: () async {
+                        final ctrl = TextEditingController();
+                        final created = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('New Category'),
+                            content: TextField(
+                              controller: ctrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Category name e.g. Tailors, Helpers',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
+                            ],
+                          ),
+                        );
+                        if (created == true) {
+                          final name = ctrl.text.trim();
+                          if (name.isNotEmpty) {
+                            final cat = await widget.dataService.createWorkerCategory(name);
+                            if (cat != null) {
+                              setDialogState(() => selectedCategoryId = cat.id);
+                            }
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.add),
                     ),
-                  );
-                }
-              }
-            },
-            child: const Text('Add'),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: isLoading ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: isLoading ? null : () async {
+                final name = nameController.text.trim();
+                final phone = phoneController.text.trim();
+                final address = addressController.text.trim();
+                
+                if (name.isEmpty || phone.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please fill required fields'), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
+                
+                setDialogState(() => isLoading = true);
+                
+                try {
+                  final worker = Worker(
+                    id: '',
+                    name: name,
+                    phoneNumber: phone,
+                    address: address.isEmpty ? null : address,
+                    joinedDate: DateTime.now(),
+                  );
+                  
+                  final createdWorker = await widget.dataService.addWorker(worker, categoryId: selectedCategoryId);
+                  
+                  if (mounted) {
+                    Navigator.pop(context);
+                    setState(() {});
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(createdWorker != null 
+                            ? 'Worker added successfully!' 
+                            : 'Failed to add worker'),
+                        backgroundColor: createdWorker != null ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  setDialogState(() => isLoading = false);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              child: isLoading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                    )
+                  : const Text('Add'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  void _addEntry() async {
+  Future<void> _addEntry() async {
     if (_selectedWorkerId == null) return;
     
     final qty = int.tryParse(_qtyController.text) ?? 0;
@@ -1063,61 +1161,40 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
       );
       return;
     }
-    
-    // Show loading
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Saving entry...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-    
-    // Create entry
-    final entry = StitchEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      workerId: _selectedWorkerId!,
-      categoryId: _selectedCategory,
-      quantity: qty,
-      date: DateTime.now(),
-    );
-    
-    // Save to backend
-    final savedEntry = await widget.dataService.addStitchEntry(entry);
-    
-    if (savedEntry != null) {
-      final worker = widget.dataService.getWorkerById(_selectedWorkerId!);
-      final categoryName = widget.dataService.categories
-          .firstWhere((c) => c.id == _selectedCategory, orElse: () => widget.dataService.categories.first)
-          .name;
-      final rate = widget.dataService.ratePerCategory[_selectedCategory] ?? 0;
-      final earnings = qty * rate;
-      
-      // Update UI - reset quantity and refresh entries list
-      if (mounted) {
+    try {
+      final created = await widget.dataService.addProductionEntry(
+        categoryId: _selectedCategory,
+        quantity: qty,
+        workerIdForUI: _selectedWorkerId,
+      );
+      if (created != null) {
+        await widget.dataService.fetchMyProduction();
+        if (!mounted) return;
         setState(() {
           _qtyController.text = '1';
         });
-        
+        final worker = widget.dataService.getWorkerById(_selectedWorkerId!);
+        final categoryName = widget.dataService.categories
+            .firstWhere((c) => c.id == _selectedCategory, orElse: () => widget.dataService.categories.first)
+            .name;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${worker?.name ?? "Worker"}: Added $qty $categoryName(s) - ₹${earnings.toStringAsFixed(0)} earned!'),
+            content: Text('${worker?.name ?? "Worker"}: Added $qty $categoryName(s) successfully!'),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
           ),
         );
-      }
-    } else {
-      if (mounted) {
+      } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to save entry. Please try again.'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+          const SnackBar(content: Text('Failed to add entry'), backgroundColor: Colors.red),
         );
       }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to add entry'), backgroundColor: Colors.red),
+      );
     }
   }
 }
-
-

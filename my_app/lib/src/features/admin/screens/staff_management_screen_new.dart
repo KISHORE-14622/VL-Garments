@@ -36,6 +36,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> with Sing
     await Future.wait([
       widget.dataService.fetchStaff(),
       widget.dataService.fetchWorkers(),
+      widget.dataService.fetchWorkerCategories(),
     ]);
     if (mounted) {
       setState(() => _isLoading = false);
@@ -481,6 +482,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> with Sing
                   
                   final staff = Staff(
                     id: '',
+                    userId: userData['id'] ?? '',
                     name: name,
                     phoneNumber: phone,
                     joinedDate: DateTime.now(),
@@ -530,6 +532,9 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> with Sing
     final phoneController = TextEditingController();
     final addressController = TextEditingController();
     bool isLoading = false;
+    String? selectedCategoryId = widget.dataService.workerCategories.isNotEmpty
+        ? widget.dataService.workerCategories.first.id
+        : null;
     
     showDialog(
       context: context,
@@ -569,6 +574,60 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> with Sing
                   ),
                   maxLines: 2,
                 ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Category', style: Theme.of(context).textTheme.bodySmall),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: selectedCategoryId,
+                        items: widget.dataService.workerCategories
+                            .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                            .toList(),
+                        onChanged: (v) => setDialogState(() => selectedCategoryId = v),
+                        decoration: const InputDecoration(border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: 'Add Category',
+                      onPressed: () async {
+                        final ctrl = TextEditingController();
+                        final created = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('New Category'),
+                            content: TextField(
+                              controller: ctrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Category name e.g. Tailors, Helpers',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                              ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
+                            ],
+                          ),
+                        );
+                        if (created == true) {
+                          final name = ctrl.text.trim();
+                          if (name.isNotEmpty) {
+                            final cat = await widget.dataService.createWorkerCategory(name);
+                            if (cat != null) {
+                              setDialogState(() => selectedCategoryId = cat.id);
+                            }
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -601,7 +660,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> with Sing
                     joinedDate: DateTime.now(),
                   );
                   
-                  final createdWorker = await widget.dataService.addWorker(worker);
+                  final createdWorker = await widget.dataService.addWorker(worker, categoryId: selectedCategoryId);
                   
                   if (mounted) {
                     Navigator.pop(context);

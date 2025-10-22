@@ -1,5 +1,10 @@
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 import express from 'express';
 import cors from 'cors';
@@ -15,6 +20,7 @@ import inventoryRoutes from './routes/inventory.js';
 import staffRoutes from './routes/staff.js';
 import workerRoutes from './routes/workers.js';
 import stitchEntryRoutes from './routes/stitchEntries.js';
+import workerCategoryRoutes from './routes/workerCategories.js';
 
 const app = express();
 
@@ -33,6 +39,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/workers', workerRoutes);
 app.use('/api/stitch-entries', stitchEntryRoutes);
+app.use('/api/worker-categories', workerCategoryRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.json({ ok: true }));
@@ -42,5 +49,3 @@ const PORT = process.env.PORT || 5000;
 connectDB().then(() => {
   app.listen(PORT, () => console.log(`API listening on port ${PORT}`));
 });
-
-

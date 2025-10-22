@@ -2,9 +2,15 @@ import express from 'express';
 import { body, validationResult } from 'express-validator';
 import Production from '../models/Production.js';
 import Rate from '../models/Rate.js';
-import { authRequired } from '../middleware/auth.js';
+import { authRequired, adminOnly } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Admin: get all production entries
+router.get('/', authRequired, adminOnly, async (_req, res) => {
+  const items = await Production.find({}).sort({ date: -1 });
+  res.json(items);
+});
 
 router.get('/me', authRequired, async (req, res) => {
   const items = await Production.find({ staff: req.user.sub }).sort({ date: -1 });
@@ -18,7 +24,10 @@ router.post(
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-    const doc = await Production.create({ ...req.body, staff: req.user.sub });
+    const { category, quantity, date, worker } = req.body;
+    const payload = { staff: req.user.sub, category, quantity, date };
+    if (worker) payload.worker = worker; // optional link to Worker document
+    const doc = await Production.create(payload);
     res.status(201).json(doc);
   }
 );

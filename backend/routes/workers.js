@@ -7,7 +7,7 @@ const router = express.Router();
 // Get all workers
 router.get('/', async (req, res) => {
   try {
-    const workers = await Worker.find().sort({ createdAt: -1 });
+    const workers = await Worker.find().populate('category').sort({ createdAt: -1 });
     return res.json(workers);
   } catch (error) {
     return res.status(500).json({ message: 'Failed to fetch workers', error: error.message });
@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
 // Get worker by ID
 router.get('/:id', async (req, res) => {
   try {
-    const worker = await Worker.findById(req.params.id);
+    const worker = await Worker.findById(req.params.id).populate('category');
     if (!worker) return res.status(404).json({ message: 'Worker not found' });
     return res.json(worker);
   } catch (error) {
@@ -37,7 +37,7 @@ router.post(
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     try {
-      const { name, phoneNumber, address, notes } = req.body;
+      const { name, phoneNumber, address, notes, category } = req.body;
 
       const worker = await Worker.create({
         name,
@@ -46,9 +46,11 @@ router.post(
         notes,
         joinedDate: new Date(),
         isActive: true,
+        ...(category ? { category } : {}),
       });
 
-      return res.status(201).json(worker);
+      const populated = await Worker.findById(worker._id).populate('category');
+      return res.status(201).json(populated);
     } catch (error) {
       return res.status(500).json({ message: 'Failed to create worker', error: error.message });
     }
@@ -58,15 +60,15 @@ router.post(
 // Update worker
 router.put('/:id', async (req, res) => {
   try {
-    const { name, phoneNumber, address, notes, isActive } = req.body;
-    const worker = await Worker.findByIdAndUpdate(
+    const { name, phoneNumber, address, notes, isActive, category } = req.body;
+    await Worker.findByIdAndUpdate(
       req.params.id,
-      { name, phoneNumber, address, notes, isActive },
+      { name, phoneNumber, address, notes, isActive, category },
       { new: true, runValidators: true }
     );
-    
-    if (!worker) return res.status(404).json({ message: 'Worker not found' });
-    return res.json(worker);
+    const updated = await Worker.findById(req.params.id).populate('category');
+    if (!updated) return res.status(404).json({ message: 'Worker not found' });
+    return res.json(updated);
   } catch (error) {
     return res.status(500).json({ message: 'Failed to update worker', error: error.message });
   }

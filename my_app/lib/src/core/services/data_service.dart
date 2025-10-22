@@ -7,98 +7,15 @@ import '../models/product.dart';
 import '../models/stitch.dart';
 import '../models/staff.dart';
 import '../models/worker.dart';
+import '../models/worker_category.dart';
+import 'auth_service.dart';
 
 class DataService {
+  final AuthService auth;
+  DataService({required this.auth});
   final List<ProductCategory> categories = [];
 
   final Map<String, double> ratePerCategory = {};
-
-  // Fetch rates from backend and build categories list
-  Future<void> fetchRates() async {
-    try {
-      final url = '${dotenv.env['API_URL']}/rates';
-      print('Fetching rates from: $url');
-      final response = await http.get(Uri.parse(url));
-      
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        ratePerCategory.clear();
-        categories.clear();
-        
-        for (var item in data) {
-          final categoryId = item['category'] as String;
-          final amount = (item['amount'] as num).toDouble();
-          
-          ratePerCategory[categoryId] = amount;
-          
-          // Build category from ID (capitalize first letter)
-          final categoryName = categoryId.split('_')
-              .map((word) => word[0].toUpperCase() + word.substring(1))
-              .join(' ');
-          
-          categories.add(ProductCategory(
-            id: categoryId,
-            name: categoryName,
-          ));
-        }
-        
-        print('✅ Fetched ${categories.length} categories with rates: $ratePerCategory');
-      } else {
-        print('❌ Failed to fetch rates: ${response.statusCode}');
-      }
-    } catch (e, stackTrace) {
-      print('❌ Error fetching rates: $e');
-      print('Stack trace: $stackTrace');
-    }
-  }
-
-  // Update rate in backend
-  Future<bool> updateRate(String category, double amount) async {
-    try {
-      final url = '${dotenv.env['API_URL']}/rates';
-      print('Updating rate: $url');
-      print('Category: $category, Amount: $amount');
-      
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'category': category,
-          'amount': amount,
-        }),
-      );
-      
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
-      
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        // Update local rate
-        ratePerCategory[category] = amount;
-        
-        // Add category if it doesn't exist
-        final categoryExists = categories.any((c) => c.id == category);
-        if (!categoryExists) {
-          final categoryName = category.split('_')
-              .map((word) => word[0].toUpperCase() + word.substring(1))
-              .join(' ');
-          categories.add(ProductCategory(
-            id: category,
-            name: categoryName,
-          ));
-          print('✅ Added new category: $categoryName');
-        }
-        
-        print('✅ Updated rate for $category: $amount');
-        return true;
-      } else {
-        print('❌ Failed to update rate: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e, stackTrace) {
-      print('❌ Error updating rate: $e');
-      print('Stack trace: $stackTrace');
-    }
-    return false;
-  }
 
   final List<Product> products = [];
   final List<StitchEntry> stitchEntries = [];
@@ -106,19 +23,20 @@ class DataService {
   final List<InventoryItem> inventory = [];
   final List<Staff> staffMembers = [];
   final List<Worker> workers = [];
+  final List<WorkerCategory> workerCategories = [];
 
   // Fetch all staff members from backend
   Future<void> fetchStaff() async {
     try {
       final url = '${dotenv.env['API_URL']}/staff';
-      final response = await http.get(Uri.parse(url));
-      
+      final response = await http.get(Uri.parse(url), headers: auth.authHeaders);
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         staffMembers.clear();
         for (var item in data) {
           staffMembers.add(Staff(
             id: item['_id'],
+            userId: (item['userId'] ?? item['user'] ?? '').toString(),
             name: item['name'],
             phoneNumber: item['phoneNumber'],
             email: item['email'],
@@ -126,10 +44,136 @@ class DataService {
             isActive: item['isActive'] ?? true,
           ));
         }
+
       }
     } catch (e) {
       print('Error fetching staff: $e');
     }
+  }
+
+  // Fetch worker categories
+  Future<void> fetchWorkerCategories() async {
+    try {
+      final url = '${dotenv.env['API_URL']}/worker-categories';
+      final response = await http.get(Uri.parse(url), headers: auth.authHeaders);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        workerCategories
+          ..clear()
+          ..addAll(data.map((e) => WorkerCategory.fromJson(e as Map<String, dynamic>)));
+      }
+    } catch (e) {
+      print('Error fetching worker categories: $e');
+    }
+  }
+
+  Future<WorkerCategory?> createWorkerCategory(String name) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/worker-categories';
+      final res = await http.post(
+        Uri.parse(url),
+        headers: auth.authHeaders,
+        body: jsonEncode({'name': name}),
+      );
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final cat = WorkerCategory.fromJson(data);
+        workerCategories.add(cat);
+        return cat;
+      }
+    } catch (e) {
+      print('Error creating worker category: $e');
+    }
+    return null;
+  }
+
+  // Helper: compute weekly totals for a worker (last 7 days)
+  Map<String, dynamic> weeklyTotalsForWorker(String workerId) {
+    final since = DateTime.now().subtract(const Duration(days: 7));
+    final entries = stitchEntries.where((e) => e.workerId == workerId && e.date.isAfter(since));
+    final units = entries.fold<int>(0, (sum, e) => sum + e.quantity);
+    final amount = calculateAmountForEntries(entries);
+    return {'units': units, 'amount': amount};
+  }
+
+  // ========== PAYMENTS ==========
+
+  Future<void> fetchPayments() async {
+    try {
+      final url = '${dotenv.env['API_URL']}/payments';
+      final res = await http.get(Uri.parse(url), headers: auth.authHeaders);
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List<dynamic>;
+        payments
+          ..clear()
+          ..addAll(list.map((p) {
+            final statusStr = (p['status'] ?? 'pending').toString();
+            final status = statusStr == 'paid' ? PaymentStatus.paid : PaymentStatus.pending;
+            return StaffPayment(
+              id: (p['_id'] ?? '').toString(),
+              staffId: (p['staff'] is Map) ? (p['staff']['_id'] ?? '').toString() : (p['staff'] ?? '').toString(),
+              periodStart: DateTime.parse(p['periodStart']),
+              periodEnd: DateTime.parse(p['periodEnd']),
+              amount: (p['amount'] is num) ? (p['amount'] as num).toDouble() : double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0,
+              status: status,
+            );
+          }));
+      } else {
+        throw Exception('Failed to fetch payments: ${res.statusCode}');
+      }
+    } catch (e) {
+      // swallow errors but keep app running
+      print('Error fetching payments: $e');
+    }
+  }
+
+  // Admin: fetch all production entries
+  Future<void> fetchAllProduction() async {
+    final url = '${dotenv.env['API_URL']}/production';
+    final res = await http.get(Uri.parse(url), headers: auth.authHeaders);
+    if (res.statusCode == 200) {
+      final list = jsonDecode(res.body) as List<dynamic>;
+      stitchEntries
+        ..clear()
+        ..addAll(list.map((e) {
+          return StitchEntry(
+            id: (e['_id'] ?? '').toString(),
+            workerId: ((e['worker'] ?? '')).toString().isNotEmpty ? (e['worker'] ?? '').toString() : 'unknown',
+            staffId: ((e['staff'] ?? '')).toString(),
+            categoryId: (e['category'] ?? '').toString(),
+            quantity: (e['quantity'] is num) ? (e['quantity'] as num).toInt() : int.tryParse(e['quantity']?.toString() ?? '0') ?? 0,
+            date: DateTime.tryParse((e['date'] ?? '').toString()) ?? DateTime.now(),
+          );
+        }));
+      return;
+    }
+    throw Exception('Failed to fetch all production: ${res.statusCode}');
+  }
+
+  // Load rates from server into local caches: categories and ratePerCategory
+  Future<void> syncRatesFromServer() async {
+    final rates = await fetchRates();
+    final cats = <ProductCategory>[];
+    final seen = <String>{};
+    ratePerCategory.clear();
+    for (final r in rates) {
+      final category = (r['category'] ?? '').toString();
+      final amount = (r['amount'] is num) ? (r['amount'] as num).toDouble() : double.tryParse(r['amount']?.toString() ?? '0') ?? 0.0;
+      if (category.isEmpty) continue;
+      ratePerCategory[category] = amount;
+      if (!seen.contains(category)) {
+        seen.add(category);
+        cats.add(ProductCategory(id: category, name: _titleCase(category.replaceAll('_', ' '))));
+      }
+    }
+    categories
+      ..clear()
+      ..addAll(cats);
+  }
+
+  String _titleCase(String input) {
+    if (input.isEmpty) return input;
+    return input.split(' ').map((w) => w.isEmpty ? w : (w[0].toUpperCase() + w.substring(1))).join(' ');
   }
 
   // Add a new staff member to backend
@@ -141,7 +185,7 @@ class DataService {
       
       final response = await http.post(
         Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
+        headers: auth.authHeaders,
         body: jsonEncode({
           'userId': userId,
           'name': staff.name,
@@ -157,6 +201,7 @@ class DataService {
         final data = jsonDecode(response.body);
         final newStaff = Staff(
           id: data['_id'],
+          userId: (data['userId'] ?? data['user'] ?? '').toString(),
           name: data['name'],
           phoneNumber: data['phoneNumber'],
           email: data['email'],
@@ -209,7 +254,7 @@ class DataService {
   Future<void> fetchWorkers() async {
     try {
       final url = '${dotenv.env['API_URL']}/workers';
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(Uri.parse(url), headers: auth.authHeaders);
       
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -224,17 +269,20 @@ class DataService {
   }
 
   // Add a new worker to backend
-  Future<Worker?> addWorker(Worker worker) async {
+  Future<Worker?> addWorker(Worker worker, {String? categoryId}) async {
     try {
       final url = '${dotenv.env['API_URL']}/workers';
       final response = await http.post(
         Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
+        headers: auth.authHeaders,
         body: jsonEncode({
           'name': worker.name,
           'phoneNumber': worker.phoneNumber,
+          if (worker.email != null) 'email': worker.email,
           'address': worker.address,
           'notes': worker.notes,
+          if (categoryId != null && categoryId.isNotEmpty) 'category': categoryId
+          else if (worker.category != null) 'category': worker.category!.id,
         }),
       );
       
@@ -254,7 +302,7 @@ class DataService {
   Future<bool> removeWorker(String workerId) async {
     try {
       final url = '${dotenv.env['API_URL']}/workers/$workerId';
-      final response = await http.delete(Uri.parse(url));
+      final response = await http.delete(Uri.parse(url), headers: auth.authHeaders);
       
       if (response.statusCode == 200) {
         workers.removeWhere((w) => w.id == workerId);
@@ -264,6 +312,143 @@ class DataService {
       print('Error removing worker: $e');
     }
     return false;
+  }
+
+  // ========== PRODUCTS ==========
+
+  // ========== PRODUCTION (STAFF) ==========
+
+  Future<void> fetchMyProduction() async {
+    final url = '${dotenv.env['API_URL']}/production/me';
+    final res = await http.get(Uri.parse(url), headers: auth.authHeaders);
+    if (res.statusCode == 200) {
+      final list = jsonDecode(res.body) as List<dynamic>;
+      stitchEntries
+        ..clear()
+        ..addAll(list.map((e) {
+          return StitchEntry(
+            id: (e['_id'] ?? '').toString(),
+            workerId: ((e['worker'] ?? '')).toString().isNotEmpty ? (e['worker'] ?? '').toString() : 'unknown',
+            staffId: ((e['staff'] ?? auth.currentUser?.id ?? '')).toString(),
+            categoryId: (e['category'] ?? '').toString(),
+            quantity: (e['quantity'] is num) ? (e['quantity'] as num).toInt() : int.tryParse(e['quantity']?.toString() ?? '0') ?? 0,
+            date: DateTime.tryParse((e['date'] ?? '').toString()) ?? DateTime.now(),
+          );
+        }));
+      return;
+    }
+    throw Exception('Failed to fetch production: ${res.statusCode}');
+  }
+
+  Future<StitchEntry?> addProductionEntry({
+    required String categoryId,
+    required int quantity,
+    DateTime? date,
+    String? workerIdForUI,
+  }) async {
+    final url = '${dotenv.env['API_URL']}/production';
+    final payload = {
+      'category': categoryId,
+      'quantity': quantity,
+      'date': (date ?? DateTime.now()).toIso8601String(),
+      if (workerIdForUI != null) 'worker': workerIdForUI,
+    };
+    final res = await http.post(
+      Uri.parse(url),
+      headers: auth.authHeaders,
+      body: jsonEncode(payload),
+    );
+    if (res.statusCode == 201) {
+      final e = jsonDecode(res.body) as Map<String, dynamic>;
+      final entry = StitchEntry(
+        id: (e['_id'] ?? '').toString(),
+        workerId: ((e['worker'] ?? '')).toString().isNotEmpty ? (e['worker'] ?? '').toString() : (workerIdForUI ?? 'unknown'),
+        staffId: ((e['staff'] ?? auth.currentUser?.id ?? '')).toString(),
+        categoryId: (e['category'] ?? '').toString(),
+        quantity: (e['quantity'] is num) ? (e['quantity'] as num).toInt() : int.tryParse(e['quantity']?.toString() ?? '0') ?? 0,
+        date: DateTime.tryParse((e['date'] ?? '').toString()) ?? DateTime.now(),
+      );
+      stitchEntries.add(entry);
+      return entry;
+    }
+    return null;
+  }
+
+  Future<List<dynamic>> fetchProducts() async {
+    final url = '${dotenv.env['API_URL']}/products';
+    final res = await http.get(Uri.parse(url));
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as List<dynamic>;
+    }
+    throw Exception('Failed to fetch products');
+  }
+
+  Future<Map<String, dynamic>> createProduct({
+    required String name,
+    required double price,
+    required String category,
+    String description = '',
+    String imageUrl = '',
+  }) async {
+    final url = '${dotenv.env['API_URL']}/products';
+    final res = await http.post(
+      Uri.parse(url),
+      headers: auth.authHeaders,
+      body: jsonEncode({
+        'name': name,
+        'price': price,
+        'category': category,
+        'description': description,
+        'imageUrl': imageUrl,
+      }),
+    );
+    if (res.statusCode == 201) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to create product: ${res.statusCode}');
+  }
+
+  Future<Map<String, dynamic>> updateProduct(String id, Map<String, dynamic> payload) async {
+    final url = '${dotenv.env['API_URL']}/products/$id';
+    final res = await http.put(
+      Uri.parse(url),
+      headers: auth.authHeaders,
+      body: jsonEncode(payload),
+    );
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to update product: ${res.statusCode}');
+  }
+
+  Future<bool> deleteProduct(String id) async {
+    final url = '${dotenv.env['API_URL']}/products/$id';
+    final res = await http.delete(Uri.parse(url), headers: auth.authHeaders);
+    return res.statusCode == 200;
+  }
+
+  // ========== RATES ==========
+
+  Future<List<dynamic>> fetchRates() async {
+    final url = '${dotenv.env['API_URL']}/rates';
+    final res = await http.get(Uri.parse(url));
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as List<dynamic>;
+    }
+    throw Exception('Failed to fetch rates');
+  }
+
+  Future<Map<String, dynamic>> upsertRate({required String category, required double amount}) async {
+    final url = '${dotenv.env['API_URL']}/rates';
+    final res = await http.post(
+      Uri.parse(url),
+      headers: auth.authHeaders,
+      body: jsonEncode({'category': category, 'amount': amount}),
+    );
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to upsert rate: ${res.statusCode}');
   }
 
   // Get worker by ID
@@ -295,14 +480,18 @@ class DataService {
           final workerIdValue = item['workerId'];
           final workerId = workerIdValue is String 
               ? workerIdValue 
-              : workerIdValue['_id'] as String;
+              : (workerIdValue?['_id']?.toString() ?? 'unknown');
+          // Extract staffId if present, else fallback to current user id
+          final sVal = item['staff'] ?? item['staffId'] ?? auth.currentUser?.id ?? '';
+          final staffId = sVal is String ? sVal : (sVal?['_id']?.toString() ?? (auth.currentUser?.id ?? ''));
           
           stitchEntries.add(StitchEntry(
-            id: item['_id'],
+            id: (item['_id'] ?? '').toString(),
             workerId: workerId,
-            categoryId: item['categoryId'],
-            quantity: item['quantity'],
-            date: DateTime.parse(item['date']),
+            staffId: staffId,
+            categoryId: (item['categoryId'] ?? item['category'] ?? '').toString(),
+            quantity: (item['quantity'] is num) ? (item['quantity'] as num).toInt() : int.tryParse(item['quantity']?.toString() ?? '0') ?? 0,
+            date: DateTime.tryParse((item['date'] ?? '').toString()) ?? DateTime.now(),
           ));
         }
         print('✅ Fetched ${stitchEntries.length} stitch entries');
@@ -345,12 +534,15 @@ class DataService {
             ? workerIdValue 
             : workerIdValue['_id'] as String;
         
+        final sVal = data['staff'] ?? data['staffId'] ?? auth.currentUser?.id ?? '';
+        final staffId = sVal is String ? sVal : (sVal?['_id']?.toString() ?? (auth.currentUser?.id ?? ''));
         final savedEntry = StitchEntry(
-          id: data['_id'],
+          id: (data['_id'] ?? '').toString(),
           workerId: workerId,
-          categoryId: data['categoryId'],
-          quantity: data['quantity'],
-          date: DateTime.parse(data['date']),
+          staffId: staffId,
+          categoryId: (data['categoryId'] ?? data['category'] ?? '').toString(),
+          quantity: (data['quantity'] is num) ? (data['quantity'] as num).toInt() : int.tryParse(data['quantity']?.toString() ?? '0') ?? 0,
+          date: DateTime.tryParse((data['date'] ?? '').toString()) ?? DateTime.now(),
         );
         stitchEntries.add(savedEntry);
         print('✅ Stitch entry added successfully');

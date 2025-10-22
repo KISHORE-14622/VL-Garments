@@ -16,9 +16,9 @@ class StaffManagementScreen extends StatefulWidget {
 }
 
 class _StaffManagementScreenState extends State<StaffManagementScreen> {
-  String _sortBy = 'production'; // production, earnings, name
-  String _filterPeriod = 'all'; // all, week, month
+  String _sortBy = 'name'; // name only
   bool _isLoading = true;
+  String _staffQuery = '';
 
   @override
   void initState() {
@@ -35,102 +35,33 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   }
 
   List<Staff> _getSortedStaff() {
-    final staff = List<Staff>.from(widget.dataService.staffMembers);
-    
-    staff.sort((a, b) {
-      final aEntries = _getFilteredEntries(a.id);
-      final bEntries = _getFilteredEntries(b.id);
-      
-      switch (_sortBy) {
-        case 'production':
-          final aProduction = aEntries.fold<int>(0, (sum, e) => (sum + e.quantity));
-          final bProduction = bEntries.fold<int>(0, (sum, e) => (sum + e.quantity));
-          return bProduction.compareTo(aProduction);
-        case 'earnings':
-          final aEarnings = widget.dataService.calculateAmountForEntries(aEntries);
-          final bEarnings = widget.dataService.calculateAmountForEntries(bEntries);
-          return bEarnings.compareTo(aEarnings);
-        case 'name':
-          return a.name.compareTo(b.name);
-        default:
-          return 0;
-      }
-    });
-    
+    final all = List<Staff>.from(widget.dataService.staffMembers);
+    final staff = _staffQuery.trim().isEmpty
+        ? all
+        : all.where((s) {
+            final q = _staffQuery.toLowerCase();
+            return s.name.toLowerCase().contains(q) ||
+                   s.phoneNumber.toLowerCase().contains(q) ||
+                   (s.email ?? '').toLowerCase().contains(q);
+          }).toList();
+    staff.sort((a, b) => a.name.compareTo(b.name));
     return staff;
-  }
-
-  List<StitchEntry> _getFilteredEntries(String workerId) {
-    final entries = widget.dataService.stitchEntries.where((e) => e.workerId == workerId).toList();
-    final now = DateTime.now();
-    
-    switch (_filterPeriod) {
-      case 'week':
-        final weekAgo = now.subtract(const Duration(days: 7));
-        return entries.where((e) => e.date.isAfter(weekAgo)).toList();
-      case 'month':
-        final monthAgo = DateTime(now.year, now.month - 1, now.day);
-        return entries.where((e) => e.date.isAfter(monthAgo)).toList();
-      default:
-        return entries;
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     final staffList = _getSortedStaff();
     
-    // Calculate overall stats
-    final totalStaff = staffList.length;
-    final allEntries = widget.dataService.stitchEntries;
-    final totalProduction = allEntries.fold<int>(0, (sum, e) => (sum + e.quantity));
-    final totalEarnings = widget.dataService.calculateAmountForEntries(allEntries);
-
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('Staff Management'),
         elevation: 0,
         actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.sort),
-            onSelected: (value) {
-              setState(() {
-                _sortBy = value;
-              });
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'production',
-                child: Row(
-                  children: [
-                    Icon(Icons.inventory_2, size: 20),
-                    SizedBox(width: 12),
-                    Text('Sort by Production'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'earnings',
-                child: Row(
-                  children: [
-                    Icon(Icons.currency_rupee, size: 20),
-                    SizedBox(width: 12),
-                    Text('Sort by Earnings'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'name',
-                child: Row(
-                  children: [
-                    Icon(Icons.sort_by_alpha, size: 20),
-                    SizedBox(width: 12),
-                    Text('Sort by Name'),
-                  ],
-                ),
-              ),
-            ],
+          IconButton(
+            onPressed: () => setState(() { _sortBy = 'name'; }),
+            icon: const Icon(Icons.sort_by_alpha),
+            tooltip: 'Sort by Name',
           ),
         ],
       ),
@@ -141,49 +72,39 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Overall Stats
-                  _buildOverallStats(totalStaff, totalProduction, totalEarnings),
-                  const SizedBox(height: 24),
-                  
-                  // Period Filter
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Staff Members (${staffList.length})',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[800],
-                            ),
-                      ),
-                      DropdownButton<String>(
-                        value: _filterPeriod,
-                        underline: const SizedBox(),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('All Time')),
-                          DropdownMenuItem(value: 'week', child: Text('This Week')),
-                          DropdownMenuItem(value: 'month', child: Text('This Month')),
-                        ],
-                        onChanged: (v) => setState(() => _filterPeriod = v ?? _filterPeriod),
-                      ),
-                    ],
+                  Text(
+                    'Staff Members (${staffList.length})',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[800],
+                        ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Search staff
+                  TextField(
+                    decoration: const InputDecoration(
+                      hintText: 'Search staff by name, phone, or email',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (v) => setState(() => _staffQuery = v),
                   ),
                   const SizedBox(height: 16),
                   
                   // Staff List
-                  ...staffList.map((staff) {
-                    final staffEntries = _getFilteredEntries(staff.id);
-                    final totalProduction = staffEntries.fold<int>(0, (sum, e) => (sum + e.quantity));
-                    final totalEarnings = widget.dataService.calculateAmountForEntries(staffEntries);
-
-                    return _buildStaffCard(
-                      context,
-                      staff: staff,
-                      totalProduction: totalProduction,
-                      totalEarnings: totalEarnings,
-                      entriesCount: staffEntries.length,
-                    );
-                  }).toList(),
+                  if (staffList.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Text('No staff found', style: TextStyle(color: Colors.grey[600])),
+                      ),
+                    )
+                  else
+                    ...staffList.map((staff) {
+                      return _buildStaffCard(
+                        context,
+                        staff: staff,
+                      );
+                    }).toList(),
                 ],
               ),
             ),
@@ -195,98 +116,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
     );
   }
 
-  Widget _buildOverallStats(int totalStaff, int totalProduction, double totalEarnings) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).primaryColor,
-            Theme.of(context).primaryColor.withOpacity(0.7),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).primaryColor.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.people, color: Colors.white, size: 28),
-              SizedBox(width: 12),
-              Text(
-                'Overall Statistics',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _buildOverallStatItem(
-                  'Total Staff',
-                  totalStaff.toString(),
-                  Icons.people_alt,
-                ),
-              ),
-              Expanded(
-                child: _buildOverallStatItem(
-                  'Production',
-                  totalProduction.toString(),
-                  Icons.inventory_2,
-                ),
-              ),
-              Expanded(
-                child: _buildOverallStatItem(
-                  'Earnings',
-                  '₹${totalEarnings.toStringAsFixed(0)}',
-                  Icons.currency_rupee,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOverallStatItem(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white70, size: 24),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 12,
-          ),
-        ),
-      ],
-    );
-  }
+  // Removed overall stats UI (production/earnings/avg) to keep Staff Management focused on directory
 
   Widget _buildEmptyState() {
     return Center(
@@ -316,9 +146,6 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
   Widget _buildStaffCard(
     BuildContext context, {
     required Staff staff,
-    required int totalProduction,
-    required double totalEarnings,
-    required int entriesCount,
   }) {
     return InkWell(
       onTap: () {
@@ -327,7 +154,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
           MaterialPageRoute(
             builder: (context) => StaffDetailScreen(
               dataService: widget.dataService,
-              workerId: staff.id,
+              staffId: staff.id,
             ),
           ),
         );
@@ -400,16 +227,6 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                               fontSize: 13,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Icon(Icons.receipt_long, size: 14, color: Colors.grey[600]),
-                          const SizedBox(width: 4),
-                          Text(
-                            '$entriesCount entries',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 13,
-                            ),
-                          ),
                         ],
                       ),
                     ],
@@ -425,59 +242,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.grey[300]!,
-                    Colors.grey[100]!,
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatItem(
-                    icon: Icons.production_quantity_limits,
-                    label: 'Production',
-                    value: totalProduction.toString(),
-                    color: Colors.green,
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 50,
-                  color: Colors.grey[200],
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    icon: Icons.currency_rupee,
-                    label: 'Earnings',
-                    value: '₹${totalEarnings.toStringAsFixed(0)}',
-                    color: Colors.purple,
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 50,
-                  color: Colors.grey[200],
-                ),
-                Expanded(
-                  child: _buildStatItem(
-                    icon: Icons.analytics,
-                    label: 'Avg/Entry',
-                    value: entriesCount > 0 
-                        ? (totalProduction / entriesCount).toStringAsFixed(1)
-                        : '0',
-                    color: Colors.orange,
-                  ),
-                ),
-              ],
-            ),
+            // Removed per-staff production/earnings/avg stats
           ],
         ),
       ),
@@ -643,6 +408,7 @@ class _StaffManagementScreenState extends State<StaffManagementScreen> {
                   // Add staff to backend with user ID
                   final staff = Staff(
                     id: '', // Will be set by backend
+                    userId: userData['id'] ?? '',
                     name: name,
                     phoneNumber: phone,
                     joinedDate: DateTime.now(),

@@ -20,43 +20,61 @@ class AdminHomeScreen extends StatefulWidget {
 }
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
-  bool _isLoading = true;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadAll();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    await Future.wait([
-      widget.dataService.fetchRates(),
-      widget.dataService.fetchStaff(),
-      widget.dataService.fetchWorkers(),
-      widget.dataService.fetchStitchEntries(), // Load stitch entries
-    ]);
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+  Future<void> _loadAll() async {
+    setState(() => _loading = true);
+    try {
+      await widget.dataService.fetchStaff();
+    } catch (_) {}
+    try {
+      await widget.dataService.syncRatesFromServer();
+    } catch (_) {}
+    try {
+      await widget.dataService.fetchAllProduction();
+    } catch (_) {}
+    try {
+      await widget.dataService.fetchPayments();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _loading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    final totalWorkers = widget.dataService.staffMembers.length;
+    final totalProduction = widget.dataService.stitchEntries.fold<int>(0, (sum, e) => sum + e.quantity);
+    final totalRevenue = widget.dataService.calculateAmountForEntries(widget.dataService.stitchEntries);
+    final pendingPayments = widget.dataService.payments.where((p) => p.status.toString().contains('pending')).length;
+
+    if (_loading) {
       return Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
           elevation: 0,
           title: const Text('Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+          actions: [
+            IconButton(
+              onPressed: _loadAll,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+            ),
+            IconButton(
+              onPressed: () => widget.authService.signOut(),
+              icon: const Icon(Icons.logout_outlined),
+              tooltip: 'Logout',
+            ),
+          ],
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
-    final totalWorkers = widget.dataService.workers.where((w) => w.isActive).length;
-    final totalProduction = widget.dataService.stitchEntries.fold<int>(0, (sum, e) => sum + e.quantity);
-    final totalRevenue = widget.dataService.calculateAmountForEntries(widget.dataService.stitchEntries);
-    final pendingPayments = widget.dataService.payments.where((p) => p.status.toString().contains('pending')).length;
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
@@ -65,177 +83,187 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         title: const Text('Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
+            onPressed: _loadAll,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+          ),
+          IconButton(
             onPressed: () => widget.authService.signOut(),
             icon: const Icon(Icons.logout_outlined),
             tooltip: 'Logout',
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Welcome Section
-            Text(
-              'Welcome Back!',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Here\'s what\'s happening with your business today.',
-              style: TextStyle(color: Colors.grey[600], fontSize: 15),
-            ),
-            const SizedBox(height: 24),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadAll,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Welcome Section
+                    Text(
+                      'Welcome Back!',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Here\'s what\'s happening with your business today.',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 15),
+                    ),
+                    const SizedBox(height: 24),
 
-            // Stats Cards
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: 1.5,
-              children: [
-                _buildStatCard(
-                  context,
-                  icon: Icons.people_outline,
-                  title: 'Total Staff',
-                  value: totalWorkers.toString(),
-                  color: Colors.blue,
-                ),
-                _buildStatCard(
-                  context,
-                  icon: Icons.production_quantity_limits_outlined,
-                  title: 'Production',
-                  value: totalProduction.toString(),
-                  color: Colors.green,
-                ),
-                _buildStatCard(
-                  context,
-                  icon: Icons.currency_rupee,
-                  title: 'Revenue',
-                  value: '₹${totalRevenue.toStringAsFixed(0)}',
-                  color: Colors.purple,
-                ),
-                _buildStatCard(
-                  context,
-                  icon: Icons.pending_actions_outlined,
-                  title: 'Pending',
-                  value: pendingPayments.toString(),
-                  color: Colors.orange,
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
+                    // Stats Cards
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 1.5,
+                      children: [
+                        _buildStatCard(
+                          context,
+                          icon: Icons.people_outline,
+                          title: 'Total Staff',
+                          value: totalWorkers.toString(),
+                          color: Colors.blue,
+                        ),
+                        _buildStatCard(
+                          context,
+                          icon: Icons.production_quantity_limits_outlined,
+                          title: 'Production',
+                          value: totalProduction.toString(),
+                          color: Colors.green,
+                        ),
+                        _buildStatCard(
+                          context,
+                          icon: Icons.currency_rupee,
+                          title: 'Revenue',
+                          value: '₹${totalRevenue.toStringAsFixed(0)}',
+                          color: Colors.purple,
+                        ),
+                        _buildStatCard(
+                          context,
+                          icon: Icons.pending_actions_outlined,
+                          title: 'Pending',
+                          value: pendingPayments.toString(),
+                          color: Colors.orange,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
 
-            // Quick Actions
-            Text(
-              'Quick Actions',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-            ),
-            const SizedBox(height: 16),
+                    // Quick Actions
+                    Text(
+                      'Quick Actions',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800],
+                          ),
+                    ),
+                    const SizedBox(height: 16),
 
-            _buildActionCard(
-              context,
-              icon: Icons.people,
-              title: 'Staff Management',
-              subtitle: 'Manage staff members and their details',
-              color: Colors.blue,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => StaffManagementScreen(
-                    dataService: widget.dataService,
-                    authService: widget.authService,
-                  ),
+                    _buildActionCard(
+                      context,
+                      icon: Icons.people,
+                      title: 'Staff Management',
+                      subtitle: 'Manage staff members and their details',
+                      color: Colors.blue,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StaffManagementScreen(
+                            dataService: widget.dataService,
+                            authService: widget.authService,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _buildActionCard(
+                      context,
+                      icon: Icons.attach_money,
+                      title: 'Rate Management',
+                      subtitle: 'Set rates for different categories',
+                      color: Colors.green,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RateManagementScreen(dataService: widget.dataService),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _buildActionCard(
+                      context,
+                      icon: Icons.assessment_outlined,
+                      title: 'Production Overview',
+                      subtitle: 'View detailed production statistics',
+                      color: Colors.purple,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProductionOverviewScreen(dataService: widget.dataService),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _buildActionCard(
+                      context,
+                      icon: Icons.payment,
+                      title: 'Payment History',
+                      subtitle: 'Track all payments and transactions',
+                      color: Colors.orange,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PaymentHistoryScreen(dataService: widget.dataService),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _buildActionCard(
+                      context,
+                      icon: Icons.inventory_2_outlined,
+                      title: 'Inventory Management',
+                      subtitle: 'Manage stock and supplies',
+                      color: Colors.teal,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => InventoryScreen(dataService: widget.dataService),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _buildActionCard(
+                      context,
+                      icon: Icons.storefront,
+                      title: 'Wardrobe / Shop',
+                      subtitle: 'Manage and preview products',
+                      color: Colors.indigo,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ShopHomeScreen(dataService: widget.dataService),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-
-            _buildActionCard(
-              context,
-              icon: Icons.attach_money,
-              title: 'Rate Management',
-              subtitle: 'Set rates for different categories',
-              color: Colors.green,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => RateManagementScreen(dataService: widget.dataService),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            _buildActionCard(
-              context,
-              icon: Icons.assessment_outlined,
-              title: 'Production Overview',
-              subtitle: 'View detailed production statistics',
-              color: Colors.purple,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ProductionOverviewScreen(dataService: widget.dataService),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            _buildActionCard(
-              context,
-              icon: Icons.payment,
-              title: 'Payment History',
-              subtitle: 'Track all payments and transactions',
-              color: Colors.orange,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PaymentHistoryScreen(dataService: widget.dataService),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            _buildActionCard(
-              context,
-              icon: Icons.inventory_2_outlined,
-              title: 'Inventory Management',
-              subtitle: 'Manage stock and supplies',
-              color: Colors.teal,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => InventoryScreen(dataService: widget.dataService),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            _buildActionCard(
-              context,
-              icon: Icons.storefront,
-              title: 'Wardrobe / Shop',
-              subtitle: 'Manage and preview products',
-              color: Colors.indigo,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ShopHomeScreen(dataService: widget.dataService),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -253,7 +281,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -266,7 +294,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -325,7 +353,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 28),

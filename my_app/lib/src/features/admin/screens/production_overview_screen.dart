@@ -14,9 +14,38 @@ class ProductionOverviewScreen extends StatefulWidget {
 
 class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
   String _selectedPeriod = 'all';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAll();
+  }
+
+  Future<void> _loadAll() async {
+    setState(() => _loading = true);
+    try {
+      await widget.dataService.syncRatesFromServer();
+    } catch (_) {}
+    try {
+      await widget.dataService.fetchAllProduction();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _loading = false);
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          title: const Text('Production Overview'),
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
     final entries = widget.dataService.stitchEntries;
     final filteredEntries = _filterEntriesByPeriod(entries);
 
@@ -37,107 +66,111 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
         title: const Text('Production Overview'),
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Period Filter
-            Row(
-              children: [
-                _buildPeriodChip('All Time', 'all'),
-                const SizedBox(width: 8),
-                _buildPeriodChip('This Week', 'week'),
-                const SizedBox(width: 8),
-                _buildPeriodChip('This Month', 'month'),
-              ],
-            ),
-            const SizedBox(height: 24),
+      body: RefreshIndicator(
+        onRefresh: _loadAll,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Period Filter
+              Row(
+                children: [
+                  _buildPeriodChip('All Time', 'all'),
+                  const SizedBox(width: 8),
+                  _buildPeriodChip('This Week', 'week'),
+                  const SizedBox(width: 8),
+                  _buildPeriodChip('This Month', 'month'),
+                ],
+              ),
+              const SizedBox(height: 24),
 
-            // Summary Stats
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    'Total Production',
-                    totalProduction.toString(),
-                    Icons.production_quantity_limits,
-                    Colors.blue,
+              // Summary Stats
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      'Total Production',
+                      totalProduction.toString(),
+                      Icons.production_quantity_limits,
+                      Colors.blue,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildStatCard(
-                    'Active Staff',
-                    uniqueWorkers.toString(),
-                    Icons.people,
-                    Colors.green,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildStatCard(
+                      'Active Staff',
+                      uniqueWorkers.toString(),
+                      Icons.people,
+                      Colors.green,
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildStatCard(
-              'Total Value',
-              '₹${totalValue.toStringAsFixed(0)}',
-              Icons.currency_rupee,
-              Colors.purple,
-              fullWidth: true,
-            ),
-            const SizedBox(height: 32),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildStatCard(
+                'Total Value',
+                '₹${totalValue.toStringAsFixed(0)}',
+                Icons.currency_rupee,
+                Colors.purple,
+                fullWidth: true,
+              ),
+              const SizedBox(height: 32),
 
-            // Category Breakdown
-            Text(
-              'Production by Category',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-            ),
-            const SizedBox(height: 16),
+              // Category Breakdown
+              Text(
+                'Production by Category',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+              ),
+              const SizedBox(height: 16),
 
-            if (categoryStats.isEmpty)
-              _buildEmptyState()
-            else
-              ...categoryStats.entries.map((entry) {
+              if (categoryStats.isEmpty)
+                _buildEmptyState()
+              else
+                ...categoryStats.entries.map((entry) {
+                  final categoryName = widget.dataService.categories
+                      .firstWhere(
+                        (c) => c.id == entry.key,
+                        orElse: () => widget.dataService.categories.first,
+                      )
+                      .name;
+                  final percentage = totalProduction > 0
+                      ? (entry.value / totalProduction * 100)
+                      : 0.0;
+                  return _buildCategoryCard(
+                    categoryName,
+                    entry.value,
+                    percentage,
+                  );
+                }).toList(),
+
+              const SizedBox(height: 32),
+
+              // Recent Entries
+              Text(
+                'Recent Production Entries',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800],
+                    ),
+              ),
+              const SizedBox(height: 16),
+
+              ...filteredEntries.take(10).map((entry) {
                 final categoryName = widget.dataService.categories
                     .firstWhere(
-                      (c) => c.id == entry.key,
+                      (c) => c.id == entry.categoryId,
                       orElse: () => widget.dataService.categories.first,
                     )
                     .name;
-                final percentage = totalProduction > 0
-                    ? (entry.value / totalProduction * 100)
-                    : 0.0;
-                return _buildCategoryCard(
-                  categoryName,
-                  entry.value,
-                  percentage,
-                );
+                return _buildEntryCard(entry, categoryName);
               }).toList(),
-
-            const SizedBox(height: 32),
-
-            // Recent Entries
-            Text(
-              'Recent Production Entries',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
-            ),
-            const SizedBox(height: 16),
-
-            ...filteredEntries.take(10).map((entry) {
-              final categoryName = widget.dataService.categories
-                  .firstWhere(
-                    (c) => c.id == entry.categoryId,
-                    orElse: () => widget.dataService.categories.first,
-                  )
-                  .name;
-              return _buildEntryCard(entry, categoryName);
-            }).toList(),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -9,9 +9,15 @@ import '../models/user.dart';
 class AuthService {
   AppUser? _currentUser;
   final StreamController<AppUser?> _controller = StreamController<AppUser?>.broadcast();
+  String? _token;
 
   Stream<AppUser?> get userStream => _controller.stream;
   AppUser? get currentUser => _currentUser;
+  String? get token => _token;
+  Map<String, String> get authHeaders => {
+        'Content-Type': 'application/json',
+        if (_token != null) 'Authorization': 'Bearer ' + _token!,
+      };
 
   Future<AppUser> signIn({required String email, required String password}) async {
     final url = '${dotenv.env['API_URL']}/auth/login';
@@ -23,6 +29,7 @@ class AuthService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
+      _token = data['token'] as String?;
       _currentUser = AppUser.fromJson(data['user']);
       _controller.add(_currentUser);
       return _currentUser!;
@@ -91,6 +98,7 @@ class AuthService {
 
   Future<void> signOut() async {
     _currentUser = null;
+    _token = null;
     _controller.add(null);
   }
 

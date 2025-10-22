@@ -13,7 +13,7 @@ class RateManagementScreen extends StatefulWidget {
 }
 
 class _RateManagementScreenState extends State<RateManagementScreen> {
-  bool _isLoading = true;
+  bool _loading = true;
 
   @override
   void initState() {
@@ -22,22 +22,44 @@ class _RateManagementScreenState extends State<RateManagementScreen> {
   }
 
   Future<void> _loadRates() async {
-    setState(() => _isLoading = true);
-    await widget.dataService.fetchRates();
-    if (mounted) {
-      setState(() => _isLoading = false);
+    try {
+      final rates = await widget.dataService.fetchRates();
+      // rates: List of { category, amount }
+      final cats = <ProductCategory>[];
+      final seen = <String>{};
+      widget.dataService.ratePerCategory.clear();
+      for (final r in rates) {
+        final category = (r['category'] ?? '').toString();
+        final amount = (r['amount'] is num) ? (r['amount'] as num).toDouble() : double.tryParse(r['amount']?.toString() ?? '0') ?? 0.0;
+        if (category.isEmpty) continue;
+        widget.dataService.ratePerCategory[category] = amount;
+        if (!seen.contains(category)) {
+          seen.add(category);
+          cats.add(ProductCategory(id: category, name: _titleCase(category.replaceAll('_', ' '))));
+        }
+      }
+      setState(() {
+        widget.dataService.categories
+          ..clear()
+          ..addAll(cats);
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() => _loading = false);
+      // Keep existing defaults if fetch fails
     }
+  }
+
+  String _titleCase(String input) {
+    if (input.isEmpty) return input;
+    return input.split(' ').map((w) => w.isEmpty ? w : (w[0].toUpperCase() + w.substring(1))).join(' ');
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Rate Management'),
-          elevation: 0,
-        ),
-        body: const Center(child: CircularProgressIndicator()),
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
     }
     return Scaffold(
@@ -229,41 +251,25 @@ class _RateManagementScreenState extends State<RateManagementScreen> {
           ElevatedButton(
             onPressed: () async {
               final newRate = double.tryParse(controller.text);
-              if (newRate != null && newRate > 0) {
-                Navigator.pop(context);
-                
-                // Show loading
+              if (newRate == null || newRate <= 0) return;
+              try {
+                await widget.dataService.upsertRate(category: categoryId, amount: newRate);
+                setState(() {
+                  widget.dataService.ratePerCategory[categoryId] = newRate;
+                });
+                if (mounted) Navigator.pop(context);
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Updating rate...'),
                     duration: Duration(seconds: 1),
                   ),
                 );
-                
-                // Update in backend
-                final success = await widget.dataService.updateRate(categoryId, newRate);
-                
-                if (success) {
-                  setState(() {});
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Rate updated for $categoryName'),
-                        backgroundColor: Colors.green,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to update rate'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to update rate'), backgroundColor: Colors.red),
+                  );
                 }
               }
             },
@@ -321,43 +327,31 @@ class _RateManagementScreenState extends State<RateManagementScreen> {
             onPressed: () async {
               final name = nameController.text.trim();
               final rate = double.tryParse(rateController.text);
-              
-              if (name.isNotEmpty && rate != null && rate > 0) {
-                final categoryId = name.toLowerCase().replaceAll(' ', '_');
-                Navigator.pop(context);
-                
-                // Show loading
+              if (name.isEmpty || rate == null || rate <= 0) return;
+              final categoryId = name.toLowerCase().replaceAll(' ', '_');
+              try {
+                await widget.dataService.upsertRate(category: categoryId, amount: rate);
+                setState(() {
+                  // add to local lists
+                  if (!widget.dataService.categories.any((c) => c.id == categoryId)) {
+                    widget.dataService.categories.add(ProductCategory(id: categoryId, name: name));
+                  }
+                  widget.dataService.ratePerCategory[categoryId] = rate;
+                });
+                if (mounted) Navigator.pop(context);
+                if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Adding category...'),
-                    duration: Duration(seconds: 1),
+                  SnackBar(
+                    content: Text('Category "$name" added/updated'),
+                    backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
                   ),
                 );
-                
-                // Update in backend (category will be added automatically)
-                final success = await widget.dataService.updateRate(categoryId, rate);
-                
-                if (success) {
-                  setState(() {}); // Rebuild UI to show new category
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Category "$name" added successfully'),
-                        backgroundColor: Colors.green,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                } else {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to add category'),
-                        backgroundColor: Colors.red,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Failed to save category'), backgroundColor: Colors.red),
+                  );
                 }
               }
             },

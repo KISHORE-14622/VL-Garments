@@ -1,5 +1,6 @@
 class Staff {
   final String id;
+  final String userId; // reference to User document who owns this staff account
   final String name;
   final String phoneNumber;
   final String? email;
@@ -8,6 +9,7 @@ class Staff {
 
   const Staff({
     required this.id,
+    required this.userId,
     required this.name,
     required this.phoneNumber,
     this.email,
@@ -18,6 +20,7 @@ class Staff {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'userId': userId,
       'name': name,
       'phoneNumber': phoneNumber,
       'email': email,
@@ -29,6 +32,7 @@ class Staff {
   factory Staff.fromJson(Map<String, dynamic> json) {
     return Staff(
       id: json['id'],
+      userId: json['userId'] ?? json['user'] ?? '',
       name: json['name'],
       phoneNumber: json['phoneNumber'],
       email: json['email'],

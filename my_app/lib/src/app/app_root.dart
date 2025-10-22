@@ -6,7 +6,6 @@ import '../core/services/data_service.dart';
 import '../features/admin/admin_home_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/staff/staff_home_screen.dart';
-import '../features/shop/shop_home_screen.dart';
 
 class AppRoot extends StatefulWidget {
   final AuthService authService;
@@ -21,11 +20,11 @@ class AppRoot extends StatefulWidget {
 class _AppRootState extends State<AppRoot> {
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
+    return StreamBuilder<AppUser?>(
       stream: widget.authService.userStream,
       initialData: widget.authService.currentUser,
       builder: (context, snapshot) {
-        final user = snapshot.data as AppUser?;
+        final user = snapshot.data;
         if (user == null) {
           return LoginScreen(authService: widget.authService);
         }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/data_service.dart';
 import 'screens/inventory_screen.dart';
+import 'screens/payments_screen.dart';
 import 'screens/payment_history_screen.dart';
 import 'screens/production_overview_screen.dart';
 import 'screens/rate_management_screen.dart';
@@ -219,10 +220,25 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
                     _buildActionCard(
                       context,
-                      icon: Icons.payment,
+                      icon: Icons.payments_outlined,
+                      title: 'Payments',
+                      subtitle: 'Process pending worker payments',
+                      color: Colors.orange,
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PaymentsScreen(dataService: widget.dataService),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    _buildActionCard(
+                      context,
+                      icon: Icons.history,
                       title: 'Payment History',
                       subtitle: 'Track all payments and transactions',
-                      color: Colors.orange,
+                      color: Colors.deepOrange,
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(

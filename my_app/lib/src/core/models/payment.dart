@@ -7,6 +7,9 @@ class StaffPayment {
   final DateTime periodEnd;
   final double amount;
   final PaymentStatus status;
+  final String? paymentMethod; // 'cash', 'razorpay', etc.
+  final String? razorpayPaymentId;
+  final String? razorpayOrderId;
 
   const StaffPayment({
     required this.id,
@@ -15,6 +18,9 @@ class StaffPayment {
     required this.periodEnd,
     required this.amount,
     required this.status,
+    this.paymentMethod,
+    this.razorpayPaymentId,
+    this.razorpayOrderId,
   });
 }
 

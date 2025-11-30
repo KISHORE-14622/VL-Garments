@@ -21,20 +21,39 @@ class AuthService {
 
   Future<AppUser> signIn({required String email, required String password}) async {
     final url = '${dotenv.env['API_URL']}/auth/login';
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      );
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      _token = data['token'] as String?;
-      _currentUser = AppUser.fromJson(data['user']);
-      _controller.add(_currentUser);
-      return _currentUser!;
-    } else {
-      throw Exception('Failed to sign in');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _token = data['token'] as String?;
+        _currentUser = AppUser.fromJson(data['user']);
+        _controller.add(_currentUser);
+        return _currentUser!;
+      } else if (response.statusCode == 401) {
+        final error = jsonDecode(response.body);
+        final message = error['message'] ?? 'Invalid credentials';
+        // Provide specific error messages
+        if (message.toLowerCase().contains('password')) {
+          throw Exception('Incorrect password. Please try again.');
+        } else if (message.toLowerCase().contains('email') || message.toLowerCase().contains('user')) {
+          throw Exception('Email not found. Please check your email.');
+        } else {
+          throw Exception('Invalid email or password.');
+        }
+      } else if (response.statusCode == 400) {
+        final error = jsonDecode(response.body);
+        throw Exception(error['message'] ?? 'Invalid request. Please check your input.');
+      } else {
+        throw Exception('Login failed. Please try again later.');
+      }
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Network error. Please check your connection.');
     }
   }
 

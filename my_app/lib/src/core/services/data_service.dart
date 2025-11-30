@@ -98,6 +98,61 @@ class DataService {
 
   // ========== PAYMENTS ==========
 
+  Future<StaffPayment?> createPayment({
+    required String staffId,
+    required double amount,
+    required DateTime periodStart,
+    required DateTime periodEnd,
+    String status = 'pending',
+    String? paymentMethod,
+    String? razorpayPaymentId,
+    String? razorpayOrderId,
+  }) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/payments';
+      final body = {
+        'staff': staffId,
+        'amount': amount,
+        'periodStart': periodStart.toIso8601String(),
+        'periodEnd': periodEnd.toIso8601String(),
+        'status': status,
+        if (paymentMethod != null) 'paymentMethod': paymentMethod,
+        if (razorpayPaymentId != null) 'razorpayPaymentId': razorpayPaymentId,
+        if (razorpayOrderId != null) 'razorpayOrderId': razorpayOrderId,
+      };
+      
+      final res = await http.post(
+        Uri.parse(url),
+        headers: auth.authHeaders,
+        body: jsonEncode(body),
+      );
+      
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        final p = jsonDecode(res.body);
+        final statusStr = (p['status'] ?? 'pending').toString();
+        final paymentStatus = statusStr == 'paid' ? PaymentStatus.paid : PaymentStatus.pending;
+        final payment = StaffPayment(
+          id: (p['_id'] ?? '').toString(),
+          staffId: (p['staff'] is Map) ? (p['staff']['_id'] ?? '').toString() : (p['staff'] ?? '').toString(),
+          periodStart: DateTime.parse(p['periodStart']),
+          periodEnd: DateTime.parse(p['periodEnd']),
+          amount: (p['amount'] is num) ? (p['amount'] as num).toDouble() : double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0,
+          status: paymentStatus,
+          paymentMethod: p['paymentMethod']?.toString(),
+          razorpayPaymentId: p['razorpayPaymentId']?.toString(),
+          razorpayOrderId: p['razorpayOrderId']?.toString(),
+        );
+        payments.add(payment);
+        return payment;
+      } else {
+        throw Exception('Failed to create payment: ${res.statusCode}');
+      }
+    } catch (e) {
+      print('Error creating payment: $e');
+      rethrow;
+    }
+  }
+
   Future<void> fetchPayments() async {
     try {
       final url = '${dotenv.env['API_URL']}/payments';
@@ -116,6 +171,9 @@ class DataService {
               periodEnd: DateTime.parse(p['periodEnd']),
               amount: (p['amount'] is num) ? (p['amount'] as num).toDouble() : double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0,
               status: status,
+              paymentMethod: p['paymentMethod']?.toString(),
+              razorpayPaymentId: p['razorpayPaymentId']?.toString(),
+              razorpayOrderId: p['razorpayOrderId']?.toString(),
             );
           }));
       } else {

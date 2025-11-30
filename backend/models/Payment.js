@@ -7,6 +7,10 @@ const paymentSchema = new mongoose.Schema(
     periodEnd: { type: Date, required: true },
     amount: { type: Number, required: true },
     status: { type: String, enum: ['pending', 'paid'], default: 'pending' },
+    paymentMethod: { type: String, enum: ['cash', 'razorpay'], default: null },
+    razorpayPaymentId: { type: String, default: null },
+    razorpayOrderId: { type: String, default: null },
+    razorpaySignature: { type: String, default: null },
   },
   { timestamps: true }
 );

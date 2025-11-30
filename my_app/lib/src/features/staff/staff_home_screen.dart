@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/models/stitch.dart';
 import '../../core/models/user.dart';
 import '../../core/models/worker.dart';
+import '../../core/models/worker_category.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/data_service.dart';
 
@@ -24,8 +25,10 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
   String _selectedPeriod = 'today';
   late TabController _tabController;
   String? _selectedWorkerId;
+  String? _selectedCategoryId;
   bool _isLoadingWorkers = true;
   String _workerQuery = '';
+  String _categoryQuery = '';
 
   @override
   void initState() {
@@ -136,13 +139,14 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
     }
 
     final activeWorkers = widget.dataService.getActiveWorkers();
+    final activeCategories = widget.dataService.workerCategories.where((c) => c.isActive).toList();
     
-    // Show worker selector if no worker is selected
-    if (_selectedWorkerId == null) {
+    // Show category selector if no category is selected
+    if (_selectedCategoryId == null) {
       return Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: AppBar(
-          title: const Text('Select Worker'),
+          title: const Text('Select Category'),
           elevation: 0,
           actions: [
             IconButton(
@@ -157,9 +161,49 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
             ),
           ],
         ),
-        body: activeWorkers.isEmpty
-            ? _buildNoWorkersState()
-            : _buildWorkerSelector(activeWorkers),
+        body: activeCategories.isEmpty
+            ? _buildNoCategoriesState()
+            : _buildCategorySelector(activeCategories),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _showAddWorkerDialog,
+          icon: const Icon(Icons.person_add),
+          label: const Text('Add Worker'),
+        ),
+      );
+    }
+    
+    // Show worker selector if category is selected but no worker is selected
+    if (_selectedWorkerId == null) {
+      final categoryWorkers = activeWorkers.where((w) => w.category?.id == _selectedCategoryId).toList();
+      return Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () {
+              setState(() {
+                _selectedCategoryId = null;
+              });
+            },
+          ),
+          title: Text(_getCategoryName(_selectedCategoryId!)),
+          elevation: 0,
+          actions: [
+            IconButton(
+              onPressed: _showAccountDetails,
+              icon: const Icon(Icons.account_circle),
+              tooltip: 'My Account',
+            ),
+            IconButton(
+              onPressed: () => widget.authService.signOut(),
+              icon: const Icon(Icons.logout),
+              tooltip: 'Logout',
+            ),
+          ],
+        ),
+        body: categoryWorkers.isEmpty
+            ? _buildNoWorkersInCategoryState()
+            : _buildWorkerSelector(categoryWorkers),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _showAddWorkerDialog,
           icon: const Icon(Icons.person_add),
@@ -189,6 +233,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
           onPressed: () {
             setState(() {
               _selectedWorkerId = null;
+              _selectedCategoryId = null;
             });
           },
         ),
@@ -774,6 +819,174 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
     );
   }
 
+  String _getCategoryName(String categoryId) {
+    final category = widget.dataService.workerCategories.firstWhere(
+      (c) => c.id == categoryId,
+      orElse: () => const WorkerCategory(id: '', name: 'Unknown'),
+    );
+    return category.name;
+  }
+
+  Widget _buildCategorySelector(List<WorkerCategory> categoryList) {
+    final filtered = _categoryQuery.trim().isEmpty
+        ? categoryList
+        : categoryList.where((c) {
+            final q = _categoryQuery.toLowerCase();
+            return c.name.toLowerCase().contains(q);
+          }).toList();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  Theme.of(context).primaryColor,
+                  Theme.of(context).primaryColor.withValues(alpha: 0.7),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.category, color: Colors.white, size: 32),
+                SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Select Category',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Choose a category to view workers',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          // Search categories
+          TextField(
+            decoration: const InputDecoration(
+              hintText: 'Search categories',
+              prefixIcon: Icon(Icons.search),
+            ),
+            onChanged: (v) => setState(() => _categoryQuery = v),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Categories',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+          ),
+          const SizedBox(height: 16),
+          if (filtered.isEmpty)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text('No categories found', style: TextStyle(color: Colors.grey[600])),
+              ),
+            )
+          else
+            ...filtered.map((category) {
+              final workersInCategory = widget.dataService.getActiveWorkers()
+                  .where((w) => w.category?.id == category.id)
+                  .length;
+              return InkWell(
+                onTap: () {
+                  setState(() {
+                    _selectedCategoryId = category.id;
+                  });
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Theme.of(context).primaryColor,
+                              Theme.of(context).primaryColor.withValues(alpha: 0.7),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.category, color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              category.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.people, size: 14, color: Colors.grey[600]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '$workersInCategory worker${workersInCategory != 1 ? 's' : ''}',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+        ],
+      ),
+    );
+  }
+
   Widget _buildWorkerSelector(List<Worker> workerList) {
     final filtered = _workerQuery.trim().isEmpty
         ? workerList
@@ -830,9 +1043,9 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
           const SizedBox(height: 24),
           // Search workers
           TextField(
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               hintText: 'Search workers by name or phone',
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon: Icon(Icons.search),
             ),
             onChanged: (v) => setState(() => _workerQuery = v),
           ),
@@ -938,6 +1151,76 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
             );
           }).toList(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNoCategoriesState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(48),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.category_outlined, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No Categories',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add workers with categories to start tracking production',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _showAddWorkerDialog,
+              icon: const Icon(Icons.person_add),
+              label: const Text('Add Worker'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoWorkersInCategoryState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(48),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_outline, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No Workers in this Category',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add workers to this category to start tracking production',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _showAddWorkerDialog,
+              icon: const Icon(Icons.person_add),
+              label: const Text('Add Worker'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -165,10 +165,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             duration: const Duration(milliseconds: 600),
                             curve: Curves.easeOutBack,
                             builder: (context, value, child) {
+                              // Ensure opacity stays within valid range
+                              final opacity = value.clamp(0.0, 1.0);
                               return Transform.scale(
                                 scale: value,
                                 child: Opacity(
-                                  opacity: value,
+                                  opacity: opacity,
                                   child: child,
                                 ),
                               );

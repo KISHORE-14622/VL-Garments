@@ -41,6 +41,28 @@ app.use('/api/workers', workerRoutes);
 app.use('/api/stitch-entries', stitchEntryRoutes);
 app.use('/api/worker-categories', workerCategoryRoutes);
 
+// Welcome route
+app.get('/', (req, res) => {
+  res.json({
+    message: 'VL Garments API',
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      auth: '/api/auth',
+      products: '/api/products',
+      workers: '/api/workers',
+      production: '/api/production',
+      payments: '/api/payments',
+      inventory: '/api/inventory',
+      staff: '/api/staff',
+      stitchEntries: '/api/stitch-entries',
+      workerCategories: '/api/worker-categories',
+      rates: '/api/rates'
+    }
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => res.json({ ok: true }));
 

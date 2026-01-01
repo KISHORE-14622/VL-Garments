@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -7,20 +8,27 @@ import 'auth_service.dart';
 
 class RazorpayService {
   final AuthService authService;
-  late Razorpay _razorpay;
+  late Razorpay? _razorpay;
   
   Function(String, String, String)? onSuccess;
   Function(String)? onError;
 
   RazorpayService({required this.authService}) {
-    _razorpay = Razorpay();
-    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
-    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    // Only initialize Razorpay on mobile platforms (not web)
+    if (!kIsWeb) {
+      _razorpay = Razorpay();
+      _razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+      _razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+      _razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    } else {
+      _razorpay = null;
+    }
   }
 
   void dispose() {
-    _razorpay.clear();
+    if (!kIsWeb && _razorpay != null) {
+      _razorpay!.clear();
+    }
   }
 
   Future<Map<String, dynamic>?> createOrder({
@@ -86,6 +94,15 @@ class RazorpayService {
     String? email,
     String? contact,
   }) {
+    // Razorpay is not supported on web
+    if (kIsWeb) {
+      print('Razorpay is not supported on web platform');
+      if (onError != null) {
+        onError!('Razorpay payments are only available on mobile app. Please use the mobile app or choose another payment method.');
+      }
+      return;
+    }
+
     var options = {
       'key': dotenv.env['RAZORPAY_KEY_ID'] ?? '',
       'amount': (amount * 100).toInt(), // Amount in paise
@@ -104,7 +121,7 @@ class RazorpayService {
     };
 
     try {
-      _razorpay.open(options);
+      _razorpay?.open(options);
     } catch (e) {
       print('Error opening Razorpay checkout: $e');
       if (onError != null) {

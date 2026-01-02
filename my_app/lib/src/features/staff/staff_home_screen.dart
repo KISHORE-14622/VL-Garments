@@ -154,13 +154,9 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
               icon: const Icon(Icons.account_circle),
               tooltip: 'My Account',
             ),
-            IconButton(
-              onPressed: () => widget.authService.signOut(),
-              icon: const Icon(Icons.logout),
-              tooltip: 'Logout',
-            ),
           ],
         ),
+        drawer: _buildStaffDrawer(),
         body: activeCategories.isEmpty
             ? _buildNoCategoriesState()
             : _buildCategorySelector(activeCategories),
@@ -194,13 +190,9 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
               icon: const Icon(Icons.account_circle),
               tooltip: 'My Account',
             ),
-            IconButton(
-              onPressed: () => widget.authService.signOut(),
-              icon: const Icon(Icons.logout),
-              tooltip: 'Logout',
-            ),
           ],
         ),
+        drawer: _buildStaffDrawer(),
         body: categoryWorkers.isEmpty
             ? _buildNoWorkersInCategoryState()
             : _buildWorkerSelector(categoryWorkers),
@@ -248,13 +240,6 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
           ],
         ),
         elevation: 0,
-        actions: [
-          IconButton(
-            onPressed: () => widget.authService.signOut(),
-            icon: const Icon(Icons.logout),
-            tooltip: 'Logout',
-          ),
-        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -263,6 +248,7 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
           ],
         ),
       ),
+      drawer: _buildStaffDrawer(),
       body: TabBarView(
         controller: _tabController,
         children: [
@@ -316,43 +302,69 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
                 ),
                 const SizedBox(height: 24),
                 
-                // Category Selection
-                const Text(
-                  'Select Category',
-                  style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: widget.dataService.categories.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: Text(
-                            'Loading categories...',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        )
-                      : DropdownButtonFormField<String>(
-                          initialValue: _selectedCategory,
-                          isExpanded: true,
-                          items: widget.dataService.categories
-                              .map((c) => DropdownMenuItem(
-                                    value: c.id,
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.category, color: Theme.of(context).primaryColor, size: 20),
-                                        const SizedBox(width: 12),
-                                        Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                                      ],
-                                    ),
-                                  ))
-                              .toList(),
-                          onChanged: (v) => setState(() => _selectedCategory = v ?? _selectedCategory),
+                // Category Selection (Item Selection)
+                Builder(
+                  builder: (context) {
+                    final workerItems = _getWorkerItemCategories();
+                    
+                    // Set initial value if not set or invalid
+                    if (workerItems.isNotEmpty && 
+                        !workerItems.any((item) => item['id'] == _selectedCategory)) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        setState(() {
+                          _selectedCategory = workerItems.first['id']!;
+                        });
+                      });
+                    }
+                    
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Select Item',
+                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
                         ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: workerItems.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.all(12.0),
+                                  child: Text(
+                                    'No items configured for this category',
+                                    style: TextStyle(color: Colors.grey),
+                                  ),
+                                )
+                              : DropdownButtonFormField<String>(
+                                  value: workerItems.any((item) => item['id'] == _selectedCategory) 
+                                      ? _selectedCategory 
+                                      : workerItems.first['id'],
+                                  isExpanded: true,
+                                  items: workerItems
+                                      .map((item) => DropdownMenuItem(
+                                            value: item['id'],
+                                            child: Row(
+                                              children: [
+                                                Icon(Icons.checkroom, color: Theme.of(context).primaryColor, size: 20),
+                                                const SizedBox(width: 12),
+                                                Text(item['name']!, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                              ],
+                                            ),
+                                          ))
+                                      .toList(),
+                                  onChanged: (v) => setState(() => _selectedCategory = v ?? _selectedCategory),
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                  ),
+                                ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(height: 20),
                 
@@ -467,10 +479,8 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
             _buildEmptyState()
           else
             ...entries.reversed.take(20).map((entry) {
-              final categoryName = widget.dataService.categories
-                  .firstWhere((c) => c.id == entry.categoryId, orElse: () => widget.dataService.categories.first)
-                  .name;
-              return _buildEntryCard(entry, categoryName);
+              final itemName = _getItemName(entry.categoryId);
+              return _buildEntryCard(entry, itemName);
             }).toList(),
         ],
       ),
@@ -543,14 +553,12 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
             _buildEmptyState()
           else
             ...categoryStats.entries.map((entry) {
-              final categoryName = widget.dataService.categories
-                  .firstWhere((c) => c.id == entry.key, orElse: () => widget.dataService.categories.first)
-                  .name;
+              final itemName = _getItemName(entry.key);
               final percentage = totalProduction > 0 ? (entry.value / totalProduction * 100) : 0.0;
               final rate = widget.dataService.ratePerCategory[entry.key] ?? 0;
               final earnings = rate * entry.value;
               
-              return _buildCategoryCard(categoryName, entry.value, percentage, earnings);
+              return _buildCategoryCard(itemName, entry.value, percentage, earnings);
             }).toList(),
         ],
       ),
@@ -822,9 +830,52 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
   String _getCategoryName(String categoryId) {
     final category = widget.dataService.workerCategories.firstWhere(
       (c) => c.id == categoryId,
-      orElse: () => const WorkerCategory(id: '', name: 'Unknown'),
+      orElse: () => widget.dataService.workerCategories.first,
     );
     return category.name;
+  }
+
+  // Get filtered item categories for the selected worker
+  List<Map<String, String>> _getWorkerItemCategories() {
+    if (_selectedWorkerId == null || _selectedCategoryId == null) {
+      return [];
+    }
+
+    final items = <Map<String, String>>[];
+    
+    // Filter rates that belong to this worker category
+    // Format: workerCategoryId_itemName
+    widget.dataService.ratePerCategory.forEach((key, rate) {
+      if (key.startsWith('$_selectedCategoryId\_')) {
+        // Extract item name from the composite key
+        final itemName = key.substring(_selectedCategoryId!.length + 1);
+        items.add({
+          'id': key,
+          'name': itemName,
+        });
+      }
+    });
+
+    return items;
+  }
+
+  // Extract item name from composite key (workerCategoryId_itemName)
+  String _getItemName(String categoryId) {
+    if (categoryId.contains('_')) {
+      final parts = categoryId.split('_');
+      if (parts.length > 1) {
+        return parts.sublist(1).join('_'); // Join in case item name has underscores
+      }
+    }
+    // Fallback to old category system
+    try {
+      final category = widget.dataService.categories.firstWhere(
+        (c) => c.id == categoryId,
+      );
+      return category.name;
+    } catch (e) {
+      return categoryId; // Return the ID itself if not found
+    }
   }
 
   Widget _buildCategorySelector(List<WorkerCategory> categoryList) {
@@ -1479,5 +1530,174 @@ class _StaffHomeScreenState extends State<StaffHomeScreen> with SingleTickerProv
         const SnackBar(content: Text('Failed to add entry'), backgroundColor: Colors.red),
       );
     }
+  }
+
+  Widget _buildStaffDrawer() {
+    return Drawer(
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          children: [
+            // Profile Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Theme.of(context).primaryColor,
+                    Theme.of(context).primaryColor.withOpacity(0.8),
+                  ],
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                    ),
+                    child: CircleAvatar(
+                      radius: 35,
+                      backgroundColor: Colors.white,
+                      child: Text(
+                        widget.user.name.substring(0, 1).toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.user.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.user.email,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Staff Member',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Navigation Items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _buildStaffDrawerItem(
+                    icon: Icons.dashboard_rounded,
+                    title: 'Dashboard',
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _selectedWorkerId = null;
+                        _selectedCategoryId = null;
+                      });
+                    },
+                  ),
+                  _buildStaffDrawerItem(
+                    icon: Icons.account_circle_rounded,
+                    title: 'My Profile',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showAccountDetails();
+                    },
+                  ),
+                  const Divider(height: 32),
+                  _buildStaffDrawerItem(
+                    icon: Icons.settings_rounded,
+                    title: 'Settings',
+                    onTap: () {
+                      Navigator.pop(context);
+                      // TODO: Navigate to settings screen
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Settings screen coming soon')),
+                      );
+                    },
+                  ),
+                  _buildStaffDrawerItem(
+                    icon: Icons.logout_rounded,
+                    title: 'Logout',
+                    textColor: Colors.red,
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.authService.signOut();
+                    },
+                  ),
+                ],
+              ),
+            ),
+
+            // App Version
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Version 1.0.0',
+                style: TextStyle(
+                  color: Colors.grey[400],
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStaffDrawerItem({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+    Color? textColor,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: textColor ?? Colors.black87, size: 24),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: textColor ?? Colors.black87,
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
   }
 }

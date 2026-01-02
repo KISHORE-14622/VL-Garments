@@ -87,6 +87,23 @@ class DataService {
     return null;
   }
 
+  Future<bool> deleteWorkerCategory(String categoryId) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/worker-categories/$categoryId';
+      final res = await http.delete(
+        Uri.parse(url),
+        headers: auth.authHeaders,
+      );
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        workerCategories.removeWhere((c) => c.id == categoryId);
+        return true;
+      }
+    } catch (e) {
+      print('Error deleting worker category: $e');
+    }
+    return false;
+  }
+
   // Helper: compute weekly totals for a worker (last 7 days)
   Map<String, dynamic> weeklyTotalsForWorker(String workerId) {
     final since = DateTime.now().subtract(const Duration(days: 7));
@@ -111,7 +128,7 @@ class DataService {
     try {
       final url = '${dotenv.env['API_URL']}/payments';
       final body = {
-        'staff': staffId,
+        'worker': staffId,  // Changed from 'staff' to 'worker'
         'amount': amount,
         'periodStart': periodStart.toIso8601String(),
         'periodEnd': periodEnd.toIso8601String(),
@@ -133,7 +150,7 @@ class DataService {
         final paymentStatus = statusStr == 'paid' ? PaymentStatus.paid : PaymentStatus.pending;
         final payment = StaffPayment(
           id: (p['_id'] ?? '').toString(),
-          staffId: (p['staff'] is Map) ? (p['staff']['_id'] ?? '').toString() : (p['staff'] ?? '').toString(),
+          staffId: (p['worker'] is Map) ? (p['worker']['_id'] ?? '').toString() : (p['worker'] ?? '').toString(),
           periodStart: DateTime.parse(p['periodStart']),
           periodEnd: DateTime.parse(p['periodEnd']),
           amount: (p['amount'] is num) ? (p['amount'] as num).toDouble() : double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0,
@@ -166,7 +183,7 @@ class DataService {
             final status = statusStr == 'paid' ? PaymentStatus.paid : PaymentStatus.pending;
             return StaffPayment(
               id: (p['_id'] ?? '').toString(),
-              staffId: (p['staff'] is Map) ? (p['staff']['_id'] ?? '').toString() : (p['staff'] ?? '').toString(),
+              staffId: (p['worker'] is Map) ? (p['worker']['_id'] ?? '').toString() : (p['worker'] ?? '').toString(),
               periodStart: DateTime.parse(p['periodStart']),
               periodEnd: DateTime.parse(p['periodEnd']),
               amount: (p['amount'] is num) ? (p['amount'] as num).toDouble() : double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0,

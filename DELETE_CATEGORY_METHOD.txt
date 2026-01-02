@@ -1,0 +1,51 @@
+// Add this method to _WorkerRateManagementScreenState class
+// Insert after line 257, before _showAddCategoryDialog
+
+void _showDeleteCategoryDialog(WorkerCategory category) {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Delete Category'),
+      content: Text(
+        'Are you sure you want to delete "${category.name}"?\n\nThis will also delete all items and rates associated with this category.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            try {
+              setState(() {
+                widget.dataService.workerCategories.removeWhere((c) => c.id == category.id);
+              });
+              if (mounted) Navigator.pop(context);
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Category "${category.name}" deleted'),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to delete category: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+}

@@ -14,6 +14,85 @@ class PaymentHistoryScreen extends StatefulWidget {
 class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
   String _filterStatus = 'all';
 
+  String _getWorkerName(String staffId) {
+    try {
+      final worker = widget.dataService.workers.firstWhere(
+        (w) => w.id == staffId,
+      );
+      return worker.name;
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  Future<void> _exportToCSV() async {
+    try {
+      // Create CSV content
+      final buffer = StringBuffer();
+      buffer.writeln('Worker Name,Period Start,Period End,Amount,Status,Payment Method');
+      
+      for (final payment in widget.dataService.payments) {
+        final workerName = _getWorkerName(payment.staffId);
+        final dateFormat = DateFormat('yyyy-MM-dd');
+        final startDate = dateFormat.format(payment.periodStart);
+        final endDate = dateFormat.format(payment.periodEnd);
+        final status = payment.status.toString().split('.').last;
+        final method = payment.paymentMethod ?? 'N/A';
+        
+        buffer.writeln('$workerName,$startDate,$endDate,${payment.amount},$status,$method');
+      }
+
+      // Show dialog with CSV content
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Export CSV'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('CSV data generated successfully!'),
+                const SizedBox(height: 16),
+                const Text('Copy the data below:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!),
+                  ),
+                  child: SelectableText(
+                    buffer.toString(),
+                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Total records: ${widget.dataService.payments.length}',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error exporting CSV: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final payments = widget.dataService.payments;
@@ -24,15 +103,38 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
     final totalPaid = payments
         .where((p) => p.status.toString().contains('paid'))
         .fold<double>(0, (sum, p) => sum + p.amount);
-    final totalPending = payments
-        .where((p) => p.status.toString().contains('pending'))
-        .fold<double>(0, (sum, p) => sum + p.amount);
+    
+    // Calculate total pending (unpaid work) for all workers
+    double totalPending = 0;
+    for (var worker in widget.dataService.workers) {
+      final workerEntries = widget.dataService.stitchEntries
+          .where((entry) => entry.workerId == worker.id)
+          .toList();
+      if (workerEntries.isEmpty) continue;
+      
+      final totalEarned = widget.dataService.calculateAmountForEntries(workerEntries);
+      final paidPayments = payments
+          .where((p) => p.staffId == worker.id && p.status.toString().contains('paid'))
+          .toList();
+      final totalPaidForWorker = paidPayments.fold<double>(0, (sum, p) => sum + p.amount);
+      final pendingAmount = totalEarned - totalPaidForWorker;
+      if (pendingAmount > 0) {
+        totalPending += pendingAmount;
+      }
+    }
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('Payment History'),
         elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: payments.isEmpty ? null : _exportToCSV,
+            icon: const Icon(Icons.download_rounded),
+            tooltip: 'Export CSV',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -182,6 +284,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
   Widget _buildPaymentCard(payment) {
     final isPaid = payment.status.toString().contains('paid');
     final dateFormat = DateFormat('MMM dd, yyyy');
+    final workerName = _getWorkerName(payment.staffId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -220,7 +323,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Staff ID: ${payment.staffId}',
+                      workerName,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,

@@ -17,7 +17,9 @@ if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
 }
 
 router.get('/', authRequired, adminOnly, async (_req, res) => {
-  const items = await Payment.find({}).sort({ createdAt: -1 }).populate('staff', 'name email');
+  // Don't populate worker - we need the ID, not the user details
+  // The 'worker' field contains worker IDs
+  const items = await Payment.find({}).sort({ createdAt: -1 });
   res.json(items);
 });
 
@@ -26,7 +28,7 @@ router.post(
   authRequired,
   adminOnly,
   [
-    body('staff').isString().notEmpty(),
+    body('worker').isString().notEmpty(),
     body('periodStart').isISO8601(),
     body('periodEnd').isISO8601(),
     body('amount').isNumeric(),

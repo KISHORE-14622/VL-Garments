@@ -127,7 +127,7 @@ class _WorkerRateManagementScreenState extends State<WorkerRateManagementScreen>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Add worker categories in Staff Management first',
+                      'Add worker categories in Workers Management first',
                       style: TextStyle(color: Colors.grey[600]),
                     ),
                   ],

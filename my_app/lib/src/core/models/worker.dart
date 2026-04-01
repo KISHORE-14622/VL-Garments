@@ -9,6 +9,7 @@ class Worker {
   final String? notes;
   final DateTime joinedDate;
   final bool isActive;
+  final double dailyWage;
   final WorkerCategory? category;
 
   const Worker({
@@ -20,6 +21,7 @@ class Worker {
     this.notes,
     required this.joinedDate,
     this.isActive = true,
+    this.dailyWage = 0,
     this.category,
   });
 
@@ -32,6 +34,7 @@ class Worker {
       'notes': notes,
       'joinedDate': joinedDate.toIso8601String(),
       'isActive': isActive,
+      'dailyWage': dailyWage,
       if (category != null) 'category': category!.id,
     };
   }
@@ -55,6 +58,7 @@ class Worker {
       notes: json['notes'],
       joinedDate: DateTime.parse(json['joinedDate']),
       isActive: json['isActive'] ?? true,
+      dailyWage: (json['dailyWage'] ?? 0).toDouble(),
       category: cat,
     );
   }

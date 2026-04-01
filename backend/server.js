@@ -17,10 +17,10 @@ import rateRoutes from './routes/rates.js';
 import productionRoutes from './routes/production.js';
 import paymentRoutes from './routes/payments.js';
 import inventoryRoutes from './routes/inventory.js';
-import staffRoutes from './routes/staff.js';
 import workerRoutes from './routes/workers.js';
 import stitchEntryRoutes from './routes/stitchEntries.js';
 import workerCategoryRoutes from './routes/workerCategories.js';
+import attendanceRoutes from './routes/attendance.js';
 
 const app = express();
 
@@ -36,10 +36,10 @@ app.use('/api/rates', rateRoutes);
 app.use('/api/production', productionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/inventory', inventoryRoutes);
-app.use('/api/staff', staffRoutes);
 app.use('/api/workers', workerRoutes);
 app.use('/api/stitch-entries', stitchEntryRoutes);
 app.use('/api/worker-categories', workerCategoryRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // Welcome route
 app.get('/', (req, res) => {
@@ -55,7 +55,6 @@ app.get('/', (req, res) => {
       production: '/api/production',
       payments: '/api/payments',
       inventory: '/api/inventory',
-      staff: '/api/staff',
       stitchEntries: '/api/stitch-entries',
       workerCategories: '/api/worker-categories',
       rates: '/api/rates'

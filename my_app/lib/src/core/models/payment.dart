@@ -1,8 +1,8 @@
 enum PaymentStatus { pending, paid }
 
-class StaffPayment {
+class WorkerPayment {
   final String id;
-  final String staffId;
+  final String workerId;
   final DateTime periodStart;
   final DateTime periodEnd;
   final double amount;
@@ -11,9 +11,9 @@ class StaffPayment {
   final String? razorpayPaymentId;
   final String? razorpayOrderId;
 
-  const StaffPayment({
+  const WorkerPayment({
     required this.id,
-    required this.staffId,
+    required this.workerId,
     required this.periodStart,
     required this.periodEnd,
     required this.amount,

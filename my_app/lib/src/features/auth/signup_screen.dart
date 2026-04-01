@@ -15,7 +15,6 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  String _selectedRole = 'staff';
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -29,7 +28,6 @@ class _SignupScreenState extends State<SignupScreen> {
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
-        role: _selectedRole,
       );
       if (mounted) {
         Navigator.pop(context);
@@ -191,36 +189,6 @@ class _SignupScreenState extends State<SignupScreen> {
                         return 'Password must be at least 6 characters';
                       }
                       return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Role Field
-                  DropdownButtonFormField<String>(
-                    value: _selectedRole,
-                    decoration: InputDecoration(
-                      labelText: 'Role',
-                      prefixIcon: const Icon(Icons.badge_outlined),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'staff',
-                        child: Text('Staff'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'admin',
-                        child: Text('Admin'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _selectedRole = value);
-                      }
                     },
                   ),
                   const SizedBox(height: 32),

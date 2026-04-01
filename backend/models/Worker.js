@@ -9,6 +9,7 @@ const workerSchema = new mongoose.Schema(
     isActive: { type: Boolean, default: true },
     address: { type: String },
     notes: { type: String },
+    dailyWage: { type: Number, default: 0 },
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'WorkerCategory' },
   },
   { timestamps: true }

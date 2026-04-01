@@ -52,7 +52,7 @@ class _WorkersScreenState extends State<WorkersScreen> {
 
     // Calculate total paid
     final paidPayments = widget.dataService.payments
-        .where((p) => p.staffId == worker.id && p.status.toString().contains('paid'))
+        .where((p) => p.workerId == worker.id && p.status.toString().contains('paid'))
         .toList();
     final totalPaid = paidPayments.fold<double>(0, (sum, p) => sum + p.amount);
 
@@ -95,6 +95,175 @@ class _WorkersScreenState extends State<WorkersScreen> {
     return workers;
   }
 
+  void _showAddWorkerDialog() {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final emailController = TextEditingController();
+    final addressController = TextEditingController();
+    final notesController = TextEditingController();
+    final wageController = TextEditingController();
+    String? selectedCategoryId;
+    final cats = widget.dataService.workerCategories;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setDlg) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.person_add, color: Theme.of(context).primaryColor),
+                ),
+                const SizedBox(width: 12),
+                const Text('Add Worker'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Phone *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.phone),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.email),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (cats.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Category',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.category),
+                      ),
+                      value: selectedCategoryId,
+                      items: cats.map((c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.name),
+                      )).toList(),
+                      onChanged: (v) => setDlg(() => selectedCategoryId = v),
+                    ),
+                  if (cats.isNotEmpty) const SizedBox(height: 14),
+                  TextField(
+                    controller: wageController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Daily Wage (₹)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.currency_rupee),
+                      hintText: 'e.g. 300',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: addressController,
+                    decoration: InputDecoration(
+                      labelText: 'Address',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.location_on),
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: notesController,
+                    decoration: InputDecoration(
+                      labelText: 'Notes',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.note),
+                    ),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  final phone = phoneController.text.trim();
+                  if (name.isEmpty || phone.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Name and phone are required')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                  setState(() => _loading = true);
+
+                  final worker = Worker(
+                    id: '',
+                    name: name,
+                    phoneNumber: phone,
+                    email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
+                    address: addressController.text.trim().isEmpty ? null : addressController.text.trim(),
+                    notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                    dailyWage: double.tryParse(wageController.text.trim()) ?? 0,
+                    joinedDate: DateTime.now(),
+                  );
+
+                  final result = await widget.dataService.addWorker(worker, categoryId: selectedCategoryId);
+                  if (result != null) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Worker "${result.name}" added successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to add worker'), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
+                  await _loadData();
+                },
+                icon: const Icon(Icons.check),
+                label: const Text('Add'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredWorkers = _getFilteredWorkers();
@@ -120,6 +289,13 @@ class _WorkersScreenState extends State<WorkersScreen> {
             tooltip: 'Refresh',
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddWorkerDialog,
+        icon: const Icon(Icons.person_add),
+        label: const Text('Add Worker'),
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -332,6 +508,18 @@ class _WorkersScreenState extends State<WorkersScreen> {
                               color: Colors.grey[600],
                             ),
                           ),
+                          if (worker.dailyWage > 0) ...[
+                            const SizedBox(width: 10),
+                            Icon(Icons.currency_rupee, size: 13, color: Colors.teal[600]),
+                            Text(
+                              '${worker.dailyWage.toStringAsFixed(0)}/day',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.teal[600],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -486,7 +674,7 @@ class WorkerDetailsScreen extends StatelessWidget {
     final workDays = stats['workDays'] as int;
     final totalProduction = stats['totalProduction'] as int;
     final entries = stats['entries'] as List<StitchEntry>;
-    final payments = stats['payments'] as List<StaffPayment>;
+    final payments = stats['payments'] as List<WorkerPayment>;
     final dateFormat = DateFormat('MMM dd, yyyy');
 
     // Calculate item breakdown

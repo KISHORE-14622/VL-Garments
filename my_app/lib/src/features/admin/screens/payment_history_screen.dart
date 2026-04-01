@@ -14,10 +14,10 @@ class PaymentHistoryScreen extends StatefulWidget {
 class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
   String _filterStatus = 'all';
 
-  String _getWorkerName(String staffId) {
+  String _getWorkerName(String workerId) {
     try {
       final worker = widget.dataService.workers.firstWhere(
-        (w) => w.id == staffId,
+        (w) => w.id == workerId,
       );
       return worker.name;
     } catch (e) {
@@ -32,7 +32,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
       buffer.writeln('Worker Name,Period Start,Period End,Amount,Status,Payment Method');
       
       for (final payment in widget.dataService.payments) {
-        final workerName = _getWorkerName(payment.staffId);
+        final workerName = _getWorkerName(payment.workerId);
         final dateFormat = DateFormat('yyyy-MM-dd');
         final startDate = dateFormat.format(payment.periodStart);
         final endDate = dateFormat.format(payment.periodEnd);
@@ -114,7 +114,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
       
       final totalEarned = widget.dataService.calculateAmountForEntries(workerEntries);
       final paidPayments = payments
-          .where((p) => p.staffId == worker.id && p.status.toString().contains('paid'))
+          .where((p) => p.workerId == worker.id && p.status.toString().contains('paid'))
           .toList();
       final totalPaidForWorker = paidPayments.fold<double>(0, (sum, p) => sum + p.amount);
       final pendingAmount = totalEarned - totalPaidForWorker;
@@ -284,7 +284,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
   Widget _buildPaymentCard(payment) {
     final isPaid = payment.status.toString().contains('paid');
     final dateFormat = DateFormat('MMM dd, yyyy');
-    final workerName = _getWorkerName(payment.staffId);
+    final workerName = _getWorkerName(payment.workerId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -380,7 +380,7 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Add Payment'),
         content: const Text(
-          'Payment creation feature will be implemented with staff selection, '
+          'Payment creation feature will be implemented with worker selection, '
           'date range picker, and automatic amount calculation based on production entries.',
         ),
         actions: [

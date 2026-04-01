@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/services/data_service.dart';
 import '../../../core/models/stitch.dart';
+import '../../../core/models/worker.dart';
 
 class ProductionOverviewScreen extends StatefulWidget {
   final DataService dataService;
@@ -24,14 +25,36 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
 
   Future<void> _loadAll() async {
     setState(() => _loading = true);
-    try {
-      await widget.dataService.syncRatesFromServer();
-    } catch (_) {}
-    try {
-      await widget.dataService.fetchAllProduction();
-    } catch (_) {}
+    try { await widget.dataService.fetchWorkers(); } catch (_) {}
+    try { await widget.dataService.fetchWorkerCategories(); } catch (_) {}
+    try { await widget.dataService.syncRatesFromServer(); } catch (_) {}
+    try { await widget.dataService.fetchAllProduction(); } catch (_) {}
     if (!mounted) return;
     setState(() => _loading = false);
+  }
+
+  String _categoryDisplayName(String catId) {
+    if (catId.contains('_')) {
+      final parts = catId.split('_');
+      final wcId = parts.first;
+      final itemName = parts.sublist(1).join(' ');
+      try {
+        final wc = widget.dataService.workerCategories.firstWhere((c) => c.id == wcId);
+        return '${_titleCase(itemName)} (${wc.name})';
+      } catch (_) {}
+      return _titleCase(itemName);
+    }
+    return _titleCase(catId.replaceAll('_', ' '));
+  }
+
+  String _titleCase(String s) {
+    if (s.isEmpty) return s;
+    return s.split(' ').map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1)).join(' ');
+  }
+
+  String _workerName(String workerId) {
+    final w = widget.dataService.getWorkerById(workerId);
+    return w?.name ?? 'Unknown';
   }
 
   @override
@@ -100,7 +123,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildStatCard(
-                      'Active Staff',
+                      'Active Workers',
                       uniqueWorkers.toString(),
                       Icons.people,
                       Colors.green,
@@ -132,12 +155,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
                 _buildEmptyState()
               else
                 ...categoryStats.entries.map((entry) {
-                  final categoryName = widget.dataService.categories
-                      .firstWhere(
-                        (c) => c.id == entry.key,
-                        orElse: () => widget.dataService.categories.first,
-                      )
-                      .name;
+                  final categoryName = _categoryDisplayName(entry.key);
                   final percentage = totalProduction > 0
                       ? (entry.value / totalProduction * 100)
                       : 0.0;
@@ -161,12 +179,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
               const SizedBox(height: 16),
 
               ...filteredEntries.take(10).map((entry) {
-                final categoryName = widget.dataService.categories
-                    .firstWhere(
-                      (c) => c.id == entry.categoryId,
-                      orElse: () => widget.dataService.categories.first,
-                    )
-                    .name;
+                final categoryName = _categoryDisplayName(entry.categoryId);
                 return _buildEntryCard(entry, categoryName);
               }).toList(),
             ],
@@ -357,7 +370,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
                   ),
                 ),
                 Text(
-                  'Worker: ${entry.workerId}',
+                  'Worker: ${_workerName(entry.workerId)}',
                   style: TextStyle(
                     color: Colors.grey[600],
                     fontSize: 12,

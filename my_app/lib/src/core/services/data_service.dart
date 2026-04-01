@@ -5,9 +5,9 @@ import '../models/inventory.dart';
 import '../models/payment.dart';
 import '../models/product.dart';
 import '../models/stitch.dart';
-import '../models/staff.dart';
 import '../models/worker.dart';
 import '../models/worker_category.dart';
+import '../models/attendance.dart';
 import 'auth_service.dart';
 
 class DataService {
@@ -19,37 +19,11 @@ class DataService {
 
   final List<Product> products = [];
   final List<StitchEntry> stitchEntries = [];
-  final List<StaffPayment> payments = [];
+  final List<WorkerPayment> payments = [];
   final List<InventoryItem> inventory = [];
-  final List<Staff> staffMembers = [];
   final List<Worker> workers = [];
   final List<WorkerCategory> workerCategories = [];
-
-  // Fetch all staff members from backend
-  Future<void> fetchStaff() async {
-    try {
-      final url = '${dotenv.env['API_URL']}/staff';
-      final response = await http.get(Uri.parse(url), headers: auth.authHeaders);
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        staffMembers.clear();
-        for (var item in data) {
-          staffMembers.add(Staff(
-            id: item['_id'],
-            userId: (item['userId'] ?? item['user'] ?? '').toString(),
-            name: item['name'],
-            phoneNumber: item['phoneNumber'],
-            email: item['email'],
-            joinedDate: DateTime.parse(item['joinedDate']),
-            isActive: item['isActive'] ?? true,
-          ));
-        }
-
-      }
-    } catch (e) {
-      print('Error fetching staff: $e');
-    }
-  }
+  final List<AttendanceRecord> attendanceRecords = [];
 
   // Fetch worker categories
   Future<void> fetchWorkerCategories() async {
@@ -115,8 +89,8 @@ class DataService {
 
   // ========== PAYMENTS ==========
 
-  Future<StaffPayment?> createPayment({
-    required String staffId,
+  Future<WorkerPayment?> createPayment({
+    required String workerId,
     required double amount,
     required DateTime periodStart,
     required DateTime periodEnd,
@@ -128,7 +102,7 @@ class DataService {
     try {
       final url = '${dotenv.env['API_URL']}/payments';
       final body = {
-        'worker': staffId,  // Changed from 'staff' to 'worker'
+        'worker': workerId,
         'amount': amount,
         'periodStart': periodStart.toIso8601String(),
         'periodEnd': periodEnd.toIso8601String(),
@@ -148,9 +122,9 @@ class DataService {
         final p = jsonDecode(res.body);
         final statusStr = (p['status'] ?? 'pending').toString();
         final paymentStatus = statusStr == 'paid' ? PaymentStatus.paid : PaymentStatus.pending;
-        final payment = StaffPayment(
+        final payment = WorkerPayment(
           id: (p['_id'] ?? '').toString(),
-          staffId: (p['worker'] is Map) ? (p['worker']['_id'] ?? '').toString() : (p['worker'] ?? '').toString(),
+          workerId: (p['worker'] is Map) ? (p['worker']['_id'] ?? '').toString() : (p['worker'] ?? '').toString(),
           periodStart: DateTime.parse(p['periodStart']),
           periodEnd: DateTime.parse(p['periodEnd']),
           amount: (p['amount'] is num) ? (p['amount'] as num).toDouble() : double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0,
@@ -181,9 +155,9 @@ class DataService {
           ..addAll(list.map((p) {
             final statusStr = (p['status'] ?? 'pending').toString();
             final status = statusStr == 'paid' ? PaymentStatus.paid : PaymentStatus.pending;
-            return StaffPayment(
+            return WorkerPayment(
               id: (p['_id'] ?? '').toString(),
-              staffId: (p['worker'] is Map) ? (p['worker']['_id'] ?? '').toString() : (p['worker'] ?? '').toString(),
+              workerId: (p['worker'] is Map) ? (p['worker']['_id'] ?? '').toString() : (p['worker'] ?? '').toString(),
               periodStart: DateTime.parse(p['periodStart']),
               periodEnd: DateTime.parse(p['periodEnd']),
               amount: (p['amount'] is num) ? (p['amount'] as num).toDouble() : double.tryParse(p['amount']?.toString() ?? '0') ?? 0.0,
@@ -214,7 +188,7 @@ class DataService {
           return StitchEntry(
             id: (e['_id'] ?? '').toString(),
             workerId: ((e['worker'] ?? '')).toString().isNotEmpty ? (e['worker'] ?? '').toString() : 'unknown',
-            staffId: ((e['staff'] ?? '')).toString(),
+            createdBy: ((e['staff'] ?? '')).toString(),
             categoryId: (e['category'] ?? '').toString(),
             quantity: (e['quantity'] is num) ? (e['quantity'] as num).toInt() : int.tryParse(e['quantity']?.toString() ?? '0') ?? 0,
             date: DateTime.tryParse((e['date'] ?? '').toString()) ?? DateTime.now(),
@@ -249,69 +223,6 @@ class DataService {
   String _titleCase(String input) {
     if (input.isEmpty) return input;
     return input.split(' ').map((w) => w.isEmpty ? w : (w[0].toUpperCase() + w.substring(1))).join(' ');
-  }
-
-  // Add a new staff member to backend
-  Future<Staff?> addStaff(Staff staff, String userId, String email) async {
-    try {
-      final url = '${dotenv.env['API_URL']}/staff';
-      print('Creating staff at: $url');
-      print('UserId: $userId, Name: ${staff.name}, Email: $email');
-      
-      final response = await http.post(
-        Uri.parse(url),
-        headers: auth.authHeaders,
-        body: jsonEncode({
-          'userId': userId,
-          'name': staff.name,
-          'phoneNumber': staff.phoneNumber,
-          'email': email,
-        }),
-      );
-      
-      print('Staff creation response: ${response.statusCode}');
-      print('Response body: ${response.body}');
-      
-      if (response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        final newStaff = Staff(
-          id: data['_id'],
-          userId: (data['userId'] ?? data['user'] ?? '').toString(),
-          name: data['name'],
-          phoneNumber: data['phoneNumber'],
-          email: data['email'],
-          joinedDate: DateTime.parse(data['joinedDate']),
-          isActive: data['isActive'] ?? true,
-        );
-        staffMembers.add(newStaff);
-        return newStaff;
-      } else {
-        print('Failed to create staff: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e, stackTrace) {
-      print('Error adding staff: $e');
-      print('Stack trace: $stackTrace');
-    }
-    return null;
-  }
-
-  // Remove a staff member
-  void removeStaff(String staffId) {
-    staffMembers.removeWhere((s) => s.id == staffId);
-  }
-
-  // Get staff by ID
-  Staff? getStaffById(String staffId) {
-    try {
-      return staffMembers.firstWhere((s) => s.id == staffId);
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // Get active staff members
-  List<Staff> getActiveStaff() {
-    return staffMembers.where((s) => s.isActive).toList();
   }
 
   double calculateAmountForEntries(Iterable<StitchEntry> entries) {
@@ -356,6 +267,7 @@ class DataService {
           if (worker.email != null) 'email': worker.email,
           'address': worker.address,
           'notes': worker.notes,
+          'dailyWage': worker.dailyWage,
           if (categoryId != null && categoryId.isNotEmpty) 'category': categoryId
           else if (worker.category != null) 'category': worker.category!.id,
         }),
@@ -391,7 +303,7 @@ class DataService {
 
   // ========== PRODUCTS ==========
 
-  // ========== PRODUCTION (STAFF) ==========
+  // ========== PRODUCTION (ADMIN) ==========
 
   Future<void> fetchMyProduction() async {
     final url = '${dotenv.env['API_URL']}/production/me';
@@ -404,7 +316,7 @@ class DataService {
           return StitchEntry(
             id: (e['_id'] ?? '').toString(),
             workerId: ((e['worker'] ?? '')).toString().isNotEmpty ? (e['worker'] ?? '').toString() : 'unknown',
-            staffId: ((e['staff'] ?? auth.currentUser?.id ?? '')).toString(),
+            createdBy: ((e['staff'] ?? auth.currentUser?.id ?? '')).toString(),
             categoryId: (e['category'] ?? '').toString(),
             quantity: (e['quantity'] is num) ? (e['quantity'] as num).toInt() : int.tryParse(e['quantity']?.toString() ?? '0') ?? 0,
             date: DateTime.tryParse((e['date'] ?? '').toString()) ?? DateTime.now(),
@@ -438,7 +350,7 @@ class DataService {
       final entry = StitchEntry(
         id: (e['_id'] ?? '').toString(),
         workerId: ((e['worker'] ?? '')).toString().isNotEmpty ? (e['worker'] ?? '').toString() : (workerIdForUI ?? 'unknown'),
-        staffId: ((e['staff'] ?? auth.currentUser?.id ?? '')).toString(),
+        createdBy: ((e['staff'] ?? auth.currentUser?.id ?? '')).toString(),
         categoryId: (e['category'] ?? '').toString(),
         quantity: (e['quantity'] is num) ? (e['quantity'] as num).toInt() : int.tryParse(e['quantity']?.toString() ?? '0') ?? 0,
         date: DateTime.tryParse((e['date'] ?? '').toString()) ?? DateTime.now(),
@@ -556,14 +468,13 @@ class DataService {
           final workerId = workerIdValue is String 
               ? workerIdValue 
               : (workerIdValue?['_id']?.toString() ?? 'unknown');
-          // Extract staffId if present, else fallback to current user id
           final sVal = item['staff'] ?? item['staffId'] ?? auth.currentUser?.id ?? '';
-          final staffId = sVal is String ? sVal : (sVal?['_id']?.toString() ?? (auth.currentUser?.id ?? ''));
+          final createdBy = sVal is String ? sVal : (sVal?['_id']?.toString() ?? (auth.currentUser?.id ?? ''));
           
           stitchEntries.add(StitchEntry(
             id: (item['_id'] ?? '').toString(),
             workerId: workerId,
-            staffId: staffId,
+            createdBy: createdBy,
             categoryId: (item['categoryId'] ?? item['category'] ?? '').toString(),
             quantity: (item['quantity'] is num) ? (item['quantity'] as num).toInt() : int.tryParse(item['quantity']?.toString() ?? '0') ?? 0,
             date: DateTime.tryParse((item['date'] ?? '').toString()) ?? DateTime.now(),
@@ -610,11 +521,11 @@ class DataService {
             : workerIdValue['_id'] as String;
         
         final sVal = data['staff'] ?? data['staffId'] ?? auth.currentUser?.id ?? '';
-        final staffId = sVal is String ? sVal : (sVal?['_id']?.toString() ?? (auth.currentUser?.id ?? ''));
+        final createdBy = sVal is String ? sVal : (sVal?['_id']?.toString() ?? (auth.currentUser?.id ?? ''));
         final savedEntry = StitchEntry(
           id: (data['_id'] ?? '').toString(),
           workerId: workerId,
-          staffId: staffId,
+          createdBy: createdBy,
           categoryId: (data['categoryId'] ?? data['category'] ?? '').toString(),
           quantity: (data['quantity'] is num) ? (data['quantity'] as num).toInt() : int.tryParse(data['quantity']?.toString() ?? '0') ?? 0,
           date: DateTime.tryParse((data['date'] ?? '').toString()) ?? DateTime.now(),
@@ -661,6 +572,82 @@ class DataService {
       print('Error fetching weekly stats: $e');
     }
     return {};
+  }
+
+  // ═══ ATTENDANCE ═══
+
+  Future<void> fetchAttendance(DateTime date) async {
+    try {
+      final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final url = '${dotenv.env['API_URL']}/attendance?date=$dateStr';
+      final response = await http.get(Uri.parse(url), headers: auth.authHeaders);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        attendanceRecords
+          ..clear()
+          ..addAll(data.map((e) => AttendanceRecord.fromJson(e as Map<String, dynamic>)));
+      }
+    } catch (e) {
+      print('Error fetching attendance: $e');
+    }
+  }
+
+  Future<List<AttendanceRecord>?> markAttendance({
+    required DateTime date,
+    required List<String> workerIds,
+    String status = 'present',
+    String? notes,
+  }) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/attendance';
+      final body = {
+        'date': date.toIso8601String(),
+        'workers': workerIds,
+        'status': status,
+        if (notes != null) 'notes': notes,
+      };
+      final response = await http.post(
+        Uri.parse(url),
+        headers: auth.authHeaders,
+        body: jsonEncode(body),
+      );
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        final records = data.map((e) => AttendanceRecord.fromJson(e as Map<String, dynamic>)).toList();
+        // Refresh the list
+        await fetchAttendance(date);
+        return records;
+      }
+    } catch (e) {
+      print('Error marking attendance: $e');
+    }
+    return null;
+  }
+
+  Future<bool> updateAttendanceStatus(String id, String status) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/attendance/$id';
+      final response = await http.put(
+        Uri.parse(url),
+        headers: auth.authHeaders,
+        body: jsonEncode({'status': status}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error updating attendance: $e');
+    }
+    return false;
+  }
+
+  Future<bool> deleteAttendance(String id) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/attendance/$id';
+      final response = await http.delete(Uri.parse(url), headers: auth.authHeaders);
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error deleting attendance: $e');
+    }
+    return false;
   }
 }
 

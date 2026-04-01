@@ -1,4 +1,4 @@
-enum UserRole { admin, staff }
+enum UserRole { admin }
 
 class AppUser {
   final String id;
@@ -13,7 +13,7 @@ class AppUser {
       id: json['id'],
       name: json['name'],
       email: json['email'],
-      role: UserRole.values.firstWhere((e) => e.toString() == 'UserRole.${json['role']}'),
+      role: UserRole.admin, // Always admin now
     );
   }
 }

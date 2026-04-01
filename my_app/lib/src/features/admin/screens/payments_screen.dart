@@ -15,7 +15,7 @@ class PaymentsScreen extends StatefulWidget {
 
 class _PaymentsScreenState extends State<PaymentsScreen> {
   bool _loading = false;
-  Map<String, Map<String, dynamic>> _staffPaymentData = {};
+  Map<String, Map<String, dynamic>> _workerPaymentData = {};
   late RazorpayService _razorpayService;
   String? _selectedCategoryFilter; // null means "All"
   
@@ -65,7 +65,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     // Debug: Print all payments
     print('\n--- All Payments ---');
     for (var payment in widget.dataService.payments) {
-      print('Payment: staffId=${payment.staffId}, amount=₹${payment.amount}, status=${payment.status}');
+      print('Payment: workerId=${payment.workerId}, amount=₹${payment.amount}, status=${payment.status}');
     }
     print('---\n');
     
@@ -87,7 +87,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       
       // Calculate already paid amount
       final paidPayments = widget.dataService.payments
-          .where((p) => p.staffId == worker.id && p.status.toString().contains('paid'))
+          .where((p) => p.workerId == worker.id && p.status.toString().contains('paid'))
           .toList();
       final totalPaid = paidPayments.fold<double>(0, (sum, p) => sum + p.amount);
       
@@ -167,7 +167,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     print('Total workers with pending payments: ${workerPaymentData.length}');
     
     setState(() {
-      _staffPaymentData = workerPaymentData;
+      _workerPaymentData = workerPaymentData;
       _loading = false;
     });
   }
@@ -176,9 +176,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Widget build(BuildContext context) {
     // Get filtered payment data based on selected category
     final filteredPaymentData = _selectedCategoryFilter == null
-        ? _staffPaymentData
+        ? _workerPaymentData
         : Map.fromEntries(
-            _staffPaymentData.entries.where((entry) {
+            _workerPaymentData.entries.where((entry) {
               final worker = entry.value['worker'] as Worker;
               return worker.category?.id == _selectedCategoryFilter;
             }),
@@ -186,7 +186,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     
     final totalPending = filteredPaymentData.values
         .fold<double>(0, (sum, data) => sum + (data['pendingAmount'] as double));
-    final staffCount = filteredPaymentData.length;
+    final workerCount = filteredPaymentData.length;
     
     final categories = widget.dataService.workerCategories;
 
@@ -224,7 +224,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       Expanded(
                         child: _buildSummaryCard(
                           'Workers',
-                          staffCount.toString(),
+                          workerCount.toString(),
                           Colors.blue,
                           Icons.people,
                         ),
@@ -256,7 +256,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           ),
                         ),
                         ...categories.map((category) {
-                          final count = _staffPaymentData.values
+                          final count = _workerPaymentData.values
                               .where((data) => (data['worker'] as Worker).category?.id == category.id)
                               .length;
                           return Padding(
@@ -352,7 +352,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'All staff payments are up to date',
+            'All worker payments are up to date',
             style: TextStyle(color: Colors.grey[600]),
           ),
         ],
@@ -859,7 +859,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       // Create payment record
       if (_currentPaymentWorker != null && _currentPaymentAmount != null) {
         await widget.dataService.createPayment(
-          staffId: _currentPaymentWorker!.id,
+          workerId: _currentPaymentWorker!.id,
           amount: _currentPaymentAmount!,
           periodStart: _currentPeriodStart!,
           periodEnd: _currentPeriodEnd!,
@@ -931,7 +931,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       
       // Create payment record
       final payment = await widget.dataService.createPayment(
-        staffId: worker.id,  // Note: "staffId" actually contains worker ID
+        workerId: worker.id,
         amount: amount,
         periodStart: periodStart,
         periodEnd: periodEnd,
@@ -940,7 +940,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       );
       
       print('Payment created: ${payment?.id}');
-      print('Payment staffId (worker ID): ${payment?.staffId}');
+      print('Payment workerId: ${payment?.workerId}');
       print('Payment amount: ₹${payment?.amount}');
       
       // Force refresh all data

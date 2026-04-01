@@ -475,22 +475,58 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 }
 
-class _BlurCircle extends StatelessWidget {
+class _BlurCircle extends StatefulWidget {
   final Color color;
   final double size;
   const _BlurCircle({required this.color, required this.size});
 
   @override
+  State<_BlurCircle> createState() => _BlurCircleState();
+}
+
+class _BlurCircleState extends State<_BlurCircle> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 4),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _animation = Tween<double>(begin: -20, end: 20).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      height: size,
-      width: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(color: color, blurRadius: 80, spreadRadius: 20),
-        ],
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(_animation.value, _animation.value * 0.5),
+          child: child,
+        );
+      },
+      child: Container(
+        height: widget.size,
+        width: widget.size,
+        decoration: BoxDecoration(
+          color: widget.color,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(color: widget.color, blurRadius: 80, spreadRadius: 20),
+          ],
+        ),
       ),
     );
   }

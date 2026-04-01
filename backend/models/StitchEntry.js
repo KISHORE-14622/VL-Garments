@@ -6,7 +6,7 @@ const stitchEntrySchema = new mongoose.Schema(
     categoryId: { type: String, required: true },
     quantity: { type: Number, required: true, min: 1 },
     date: { type: Date, required: true, default: Date.now },
-    staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'Staff' }, // Who added this entry
+    staffId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Who added this entry
   },
   { timestamps: true }
 );

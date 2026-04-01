@@ -85,7 +85,7 @@ class _RateManagementScreenState extends State<RateManagementScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Set rates for each product category. These rates will be used to calculate staff earnings.',
+                    'Set rates for each product category. These rates will be used to calculate worker earnings.',
                     style: TextStyle(color: Colors.blue[900], fontSize: 13),
                   ),
                 ),

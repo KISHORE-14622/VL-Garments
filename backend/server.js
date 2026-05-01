@@ -49,8 +49,16 @@ async function startServer() {
 
     const app = express();
 
-    // Core middleware
-    app.use(cors());
+    // CORS - allow all origins (Flutter web + APK + Render frontend)
+    const corsOptions = {
+      origin: '*',
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+      credentials: false,
+    };
+    app.use(cors(corsOptions));
+    app.options('*', cors(corsOptions)); // Handle preflight for all routes
+
     app.use(express.json());
     app.use(morgan('dev'));
 

@@ -1,10 +1,33 @@
+// Global error handlers - must be first so we always see crash reasons
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err.message);
+  console.error(err.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION:', reason);
+  process.exit(1);
+});
+
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.join(__dirname, '.env') });
+
+// Load .env before anything else
+const envResult = dotenv.config({ path: path.join(__dirname, '.env') });
+if (envResult.error) {
+  console.warn('Warning: Could not load .env file:', envResult.error.message);
+}
+
+console.log('Environment check:');
+console.log('  PORT:', process.env.PORT || '(not set, will use 5000)');
+console.log('  MONGODB_URI:', process.env.MONGODB_URI ? 'SET ✓' : 'NOT SET ✗');
+console.log('  JWT_SECRET:', process.env.JWT_SECRET ? 'SET ✓' : 'NOT SET ✗');
+console.log('  NODE_ENV:', process.env.NODE_ENV || '(not set)');
 
 import express from 'express';
 import cors from 'cors';
@@ -81,4 +104,7 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 const PORT = process.env.PORT || 5000;
 connectDB().then(() => {
   app.listen(PORT, () => console.log(`API listening on port ${PORT}`));
+}).catch((err) => {
+  console.error('Failed to start server:', err.message);
+  process.exit(1);
 });

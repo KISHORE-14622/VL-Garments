@@ -48,6 +48,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     try { await widget.dataService.fetchAllProduction(); } catch (_) {}
     try { await widget.dataService.fetchPayments(); } catch (_) {}
     try { await widget.dataService.fetchWorkerCategories(); } catch (_) {}
+    try { await widget.dataService.fetchAllAttendance(); } catch (_) {}
     if (!mounted) return;
     setState(() => _loading = false);
   }
@@ -890,26 +891,36 @@ class _HomeTabState extends State<_HomeTab> {
 
   Widget _summaryCard(IconData icon, String value, String label, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
-        color: Colors.white, borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.10), blurRadius: 8, offset: const Offset(0, 2))],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2)),
+        boxShadow: [BoxShadow(color: color.withOpacity(0.10), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: color.withOpacity(0.2), blurRadius: 4)]),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(height: 10),
+        FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87))),
+        const SizedBox(height: 4),
+        FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[800], fontWeight: FontWeight.w600))),
       ]),
     );
   }
 
   Widget _miniStat(String label, String value, Color color) {
     return Column(children: [
-      Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color)),
+      FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: color))),
       const SizedBox(height: 2),
-      Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+      FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600]))),
     ]);
   }
 
@@ -945,13 +956,23 @@ class _DashboardTab extends StatelessWidget {
 
   int _calculatePendingWorkers() {
     int count = 0;
+
+    // 1. Stitch-entry (piece-rate) workers — skip daily-wage workers
     for (final worker in dataService.workers) {
+      if (worker.dailyWage > 0) continue; // handled separately below
       final entries = dataService.stitchEntries.where((e) => e.workerId == worker.id).toList();
       if (entries.isEmpty) continue;
       final totalEarned = dataService.calculateAmountForEntries(entries);
-      final totalPaid = dataService.payments.where((p) => p.workerId == worker.id).fold<double>(0, (s, p) => s + p.amount);
+      final totalPaid = dataService.payments
+          .where((p) => p.workerId == worker.id && p.status.toString().contains('paid'))
+          .fold<double>(0, (s, p) => s + p.amount);
       if (totalEarned > totalPaid) count++;
     }
+
+    // 2. Daily-wage workers — count those with attendance-based pending amounts
+    final dailyWagePending = dataService.calculateDailyWagePending();
+    count += dailyWagePending.length;
+
     return count;
   }
 
@@ -1098,22 +1119,27 @@ class _DashboardTab extends StatelessWidget {
 
   Widget _statCard(IconData icon, String value, String label, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2))],
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.2)),
+        boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
         Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, color: color, size: 22),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: color.withOpacity(0.2), blurRadius: 4)]),
+          child: Icon(icon, color: color, size: 24),
         ),
-        const SizedBox(height: 12),
-        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87)),
-        const SizedBox(height: 2),
-        Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 16),
+        FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black87))),
+        const SizedBox(height: 4),
+        FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: TextStyle(color: Colors.grey[800], fontSize: 13, fontWeight: FontWeight.w600))),
       ]),
     );
   }
@@ -1121,11 +1147,11 @@ class _DashboardTab extends StatelessWidget {
   Widget _sectionCard(BuildContext context,
       {required IconData icon, required Color iconColor, required String title, required Widget child}) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 8))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -1135,9 +1161,9 @@ class _DashboardTab extends StatelessWidget {
             child: Icon(icon, color: iconColor, size: 20),
           ),
           const SizedBox(width: 12),
-          Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
         ]),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         child,
       ]),
     );
@@ -1147,9 +1173,9 @@ class _DashboardTab extends StatelessWidget {
     return Column(children: [
       Icon(icon, color: color, size: 24),
       const SizedBox(height: 8),
-      Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+      FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87))),
       const SizedBox(height: 4),
-      Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600]), textAlign: TextAlign.center),
+      FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[700], fontWeight: FontWeight.w600), textAlign: TextAlign.center)),
     ]);
   }
 
@@ -1157,8 +1183,8 @@ class _DashboardTab extends StatelessWidget {
     return Row(children: [
       Icon(icon, size: 20, color: Colors.grey[600]),
       const SizedBox(width: 12),
-      Expanded(child: Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[700]))),
-      Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+      Expanded(child: Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[800], fontWeight: FontWeight.w500))),
+      FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))),
     ]);
   }
 }
@@ -1222,7 +1248,10 @@ class _AttendanceTabState extends State<_AttendanceTab> {
 
   // ═══ MARK ATTENDANCE ═══
   void _showMarkAttendanceSheet() {
-    final activeWorkers = widget.dataService.getActiveWorkers();
+    // Only workers with a daily wage are shown in attendance
+    final activeWorkers = widget.dataService.getActiveWorkers()
+        .where((w) => w.dailyWage > 0)
+        .toList();
     final alreadyMarked = widget.dataService.attendanceRecords
         .map((r) => r.workerId)
         .toSet();
@@ -1230,7 +1259,6 @@ class _AttendanceTabState extends State<_AttendanceTab> {
     // Pre-select workers not yet marked
     final selected = <String>{};
     String selectedStatus = 'present';
-    String filterRole = 'all';
 
     showModalBottomSheet(
       context: context,
@@ -1240,10 +1268,7 @@ class _AttendanceTabState extends State<_AttendanceTab> {
       ),
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setSheet) {
-          final workerCategories = widget.dataService.workerCategories;
-          final filteredWorkers = filterRole == 'all'
-              ? activeWorkers
-              : activeWorkers.where((w) => w.category?.id == filterRole).toList();
+          final filteredWorkers = activeWorkers;
 
           return DraggableScrollableSheet(
             expand: false,
@@ -1285,21 +1310,6 @@ class _AttendanceTabState extends State<_AttendanceTab> {
                         _statusChip('Absent', 'absent', selectedStatus, (v) => setSheet(() => selectedStatus = v)),
                         const SizedBox(width: 8),
                         _statusChip('Half Day', 'half-day', selectedStatus, (v) => setSheet(() => selectedStatus = v)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Role filter
-                  SizedBox(
-                    height: 36,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
-                        _roleFilterChip('All', 'all', filterRole, (v) => setSheet(() => filterRole = v)),
-                        ...workerCategories.map((wc) =>
-                            _roleFilterChip(wc.name, wc.id, filterRole, (v) => setSheet(() => filterRole = v))),
                       ],
                     ),
                   ),
@@ -1365,7 +1375,9 @@ class _AttendanceTabState extends State<_AttendanceTab> {
                           subtitle: Text(
                             isMarked
                                 ? 'Already marked'
-                                : (w.category?.name ?? ''),
+                                : w.dailyWage > 0
+                                    ? '₹${w.dailyWage.toStringAsFixed(0)}/day'
+                                    : (w.category?.name ?? 'No wage set'),
                             style: TextStyle(fontSize: 12, color: isMarked ? Colors.green[400] : Colors.grey[600]),
                           ),
                           trailing: isMarked
@@ -1467,28 +1479,6 @@ class _AttendanceTabState extends State<_AttendanceTab> {
     );
   }
 
-  Widget _roleFilterChip(String label, String value, String current, void Function(String) onTap) {
-    final isSelected = current == value;
-    return GestureDetector(
-      onTap: () => onTap(value),
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF4A90E2).withOpacity(0.15) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? const Color(0xFF4A90E2) : Colors.grey[300]!),
-        ),
-        child: Text(label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? const Color(0xFF4A90E2) : Colors.grey[700],
-            )),
-      ),
-    );
-  }
-
   // ═══ CHANGE STATUS ═══
   void _showChangeStatusDialog(AttendanceRecord record) {
     showDialog(
@@ -1557,6 +1547,7 @@ class _AttendanceTabState extends State<_AttendanceTab> {
   Widget build(BuildContext context) {
     final records = widget.dataService.attendanceRecords;
     final isToday = _isSameDay(_selectedDate, DateTime.now());
+    // Count all active workers for attendance
     final totalWorkers = widget.dataService.getActiveWorkers().length;
 
     int presentCount = 0, absentCount = 0, halfDayCount = 0;
@@ -1676,10 +1667,11 @@ class _AttendanceTabState extends State<_AttendanceTab> {
             // Attendance list
             Row(
               children: [
-                Text('Attendance List',
+                Text('Daily Wage Attendance',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[800])),
                 const Spacer(),
                 Text('${records.length}/$totalWorkers',
+
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey[600])),
               ],
             ),

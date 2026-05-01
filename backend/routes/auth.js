@@ -156,6 +156,70 @@ router.delete('/pin', authRequired, async (req, res) => {
   }
 });
 
+// Update profile
+router.put(
+  '/update-profile',
+  authRequired,
+  [
+    body('name').isString().notEmpty(),
+    body('email').isEmail(),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    
+    try {
+      const { name, email } = req.body;
+      const existing = await User.findOne({ email, _id: { $ne: req.user.sub } });
+      if (existing) return res.status(400).json({ message: 'Email already in use' });
+      
+      const user = await User.findByIdAndUpdate(
+        req.user.sub,
+        { name, email },
+        { new: true }
+      );
+      
+      return res.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        hasPin: !!user.pinHash,
+        biometricEnabled: user.biometricEnabled
+      });
+    } catch (error) {
+      return res.status(500).json({ message: 'Failed to update profile', error: error.message });
+    }
+  }
+);
+
+// Change password
+router.put(
+  '/change-password',
+  authRequired,
+  [
+    body('currentPassword').isString().notEmpty(),
+    body('newPassword').isLength({ min: 6 }),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+    
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const user = await User.findById(req.user.sub);
+      
+      const isValid = await bcrypt.compare(currentPassword, user.passwordHash);
+      if (!isValid) return res.status(400).json({ message: 'Invalid current password' });
+      
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await User.findByIdAndUpdate(req.user.sub, { passwordHash });
+      
+      return res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+      return res.status(500).json({ message: 'Failed to change password', error: error.message });
+    }
+  }
+);
+
 export default router;
-
-

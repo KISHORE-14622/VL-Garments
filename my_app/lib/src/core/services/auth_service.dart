@@ -178,6 +178,61 @@ class AuthService {
     }
   }
 
+  // ========== PROFILE MANAGEMENT ==========
+
+  Future<AppUser> updateProfile({required String name, required String email}) async {
+    final url = '${dotenv.env['API_URL']}/auth/update-profile';
+    final response = await http.put(
+      Uri.parse(url),
+      headers: authHeaders,
+      body: jsonEncode({
+        'name': name,
+        'email': email,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      _currentUser = AppUser.fromJson(data);
+      
+      // Update saved data
+      if (_currentUser != null) {
+        await _storage.saveUserData(
+          userId: _currentUser!.id,
+          name: _currentUser!.name,
+          email: _currentUser!.email,
+          hasPin: _hasPin,
+          biometricEnabled: _biometricEnabled,
+        );
+      }
+      
+      _controller.add(_currentUser);
+      return _currentUser!;
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to update profile');
+    }
+  }
+
+  Future<bool> changePassword({required String currentPassword, required String newPassword}) async {
+    final url = '${dotenv.env['API_URL']}/auth/change-password';
+    final response = await http.put(
+      Uri.parse(url),
+      headers: authHeaders,
+      body: jsonEncode({
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      final error = jsonDecode(response.body);
+      throw Exception(error['message'] ?? 'Failed to change password');
+    }
+  }
+
   // ========== PIN MANAGEMENT ==========
 
   /// Set up a new PIN (4-6 digits)
@@ -238,8 +293,8 @@ class AuthService {
 
   /// Change PIN
   Future<bool> changePin(String currentPin, String newPin) async {
-    // First verify current PIN locally
-    final isValid = await _storage.verifyLocalPin(currentPin);
+    // First verify current PIN
+    final isValid = await verifyPin(currentPin);
     if (!isValid) {
       throw Exception('Current PIN is incorrect');
     }
@@ -250,7 +305,8 @@ class AuthService {
 
   /// Remove PIN
   Future<bool> removePin(String currentPin) async {
-    final isValid = await _storage.verifyLocalPin(currentPin);
+    // First verify current PIN
+    final isValid = await verifyPin(currentPin);
     if (!isValid) {
       throw Exception('Current PIN is incorrect');
     }

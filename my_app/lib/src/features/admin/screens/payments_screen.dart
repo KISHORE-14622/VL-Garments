@@ -42,6 +42,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
       await widget.dataService.fetchAllProduction();
       await widget.dataService.fetchPayments();
       await widget.dataService.syncRatesFromServer();
+      await widget.dataService.fetchAllAttendance();
     } catch (e) {
       print('Error loading data: $e');
     }
@@ -56,116 +57,79 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
 
   void _calculatePendingPayments() {
     setState(() => _loading = true);
-    
-    print('=== Calculating Pending Payments ===');
-    print('Workers count: ${widget.dataService.workers.length}');
-    print('Stitch entries count: ${widget.dataService.stitchEntries.length}');
-    print('Payments count: ${widget.dataService.payments.length}');
-    
-    // Debug: Print all payments
-    print('\n--- All Payments ---');
-    for (var payment in widget.dataService.payments) {
-      print('Payment: workerId=${payment.workerId}, amount=₹${payment.amount}, status=${payment.status}');
-    }
-    print('---\n');
-    
+
     final workerPaymentData = <String, Map<String, dynamic>>{};
-    
-    // Calculate pending amounts for each worker
+
+    // ── 1. Stitch-entry (piece-rate) workers ──────────────────────────────
     for (var worker in widget.dataService.workers) {
-      // Get all production entries for this worker
+      if ((worker.dailyWage) > 0) continue; // daily-wage workers handled separately
+
       final workerEntries = widget.dataService.stitchEntries
           .where((entry) => entry.workerId == worker.id)
           .toList();
-      
-      print('Worker ${worker.name} (ID: ${worker.id}): ${workerEntries.length} entries');
-      
+
       if (workerEntries.isEmpty) continue;
-      
-      // Calculate total amount earned
+
       final totalEarned = widget.dataService.calculateAmountForEntries(workerEntries);
-      
-      // Calculate already paid amount
+
       final paidPayments = widget.dataService.payments
           .where((p) => p.workerId == worker.id && p.status.toString().contains('paid'))
           .toList();
       final totalPaid = paidPayments.fold<double>(0, (sum, p) => sum + p.amount);
-      
-      print('  Checking payments for worker ID: ${worker.id}');
-      print('  Found ${paidPayments.length} paid payments');
-      for (var p in paidPayments) {
-        print('    - Payment: ₹${p.amount}, method=${p.paymentMethod}');
-      }
-      print('  Total earned: ₹$totalEarned, Total paid: ₹$totalPaid');
-      
-      // Calculate pending amount
+
       final pendingAmount = totalEarned - totalPaid;
-      
-      if (pendingAmount > 0) {
-        // Get date range for pending work
-        final pendingEntries = workerEntries.where((entry) {
-          // Check if this entry's date is after the last payment
-          if (paidPayments.isEmpty) return true;
-          final lastPaymentDate = paidPayments
-              .map((p) => p.periodEnd)
-              .reduce((a, b) => a.isAfter(b) ? a : b);
-          return entry.date.isAfter(lastPaymentDate);
-        }).toList();
-        
-        DateTime? periodStart;
-        DateTime? periodEnd;
-        
-        if (pendingEntries.isNotEmpty) {
-          periodStart = pendingEntries
-              .map((e) => e.date)
-              .reduce((a, b) => a.isBefore(b) ? a : b);
-          periodEnd = pendingEntries
-              .map((e) => e.date)
-              .reduce((a, b) => a.isAfter(b) ? a : b);
-        } else if (workerEntries.isNotEmpty) {
-          periodStart = workerEntries
-              .map((e) => e.date)
-              .reduce((a, b) => a.isBefore(b) ? a : b);
-          periodEnd = workerEntries
-              .map((e) => e.date)
-              .reduce((a, b) => a.isAfter(b) ? a : b);
-        }
-        
-        print('  Pending amount: ₹$pendingAmount');
-        
-        // Calculate item breakdown
-        final itemBreakdown = <String, Map<String, dynamic>>{};
-        for (var entry in pendingEntries) {
-          final itemKey = entry.categoryId;
-          if (!itemBreakdown.containsKey(itemKey)) {
-            itemBreakdown[itemKey] = {
-              'quantity': 0,
-              'rate': widget.dataService.ratePerCategory[itemKey] ?? 0.0,
-              'amount': 0.0,
-            };
-          }
-          final rate = widget.dataService.ratePerCategory[itemKey] ?? 0.0;
-          itemBreakdown[itemKey]!['quantity'] = (itemBreakdown[itemKey]!['quantity'] as int) + entry.quantity;
-          itemBreakdown[itemKey]!['amount'] = (itemBreakdown[itemKey]!['amount'] as double) + (rate * entry.quantity);
-        }
-        
-        workerPaymentData[worker.id] = {
-          'worker': worker,
-          'pendingAmount': pendingAmount,
-          'totalEarned': totalEarned,
-          'totalPaid': totalPaid,
-          'periodStart': periodStart ?? DateTime.now(),
-          'periodEnd': periodEnd ?? DateTime.now(),
-          'workDays': pendingEntries.map((e) => e.date).toSet().length,
-          'itemBreakdown': itemBreakdown,
-        };
-      } else {
-        print('  No pending amount (fully paid)');
+      if (pendingAmount <= 0) continue;
+
+      final pendingEntries = workerEntries.where((entry) {
+        if (paidPayments.isEmpty) return true;
+        final lastPaymentDate = paidPayments
+            .map((p) => p.periodEnd)
+            .reduce((a, b) => a.isAfter(b) ? a : b);
+        return entry.date.isAfter(lastPaymentDate);
+      }).toList();
+
+      DateTime? periodStart;
+      DateTime? periodEnd;
+      if (pendingEntries.isNotEmpty) {
+        periodStart = pendingEntries.map((e) => e.date).reduce((a, b) => a.isBefore(b) ? a : b);
+        periodEnd   = pendingEntries.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b);
+      } else if (workerEntries.isNotEmpty) {
+        periodStart = workerEntries.map((e) => e.date).reduce((a, b) => a.isBefore(b) ? a : b);
+        periodEnd   = workerEntries.map((e) => e.date).reduce((a, b) => a.isAfter(b) ? a : b);
       }
+
+      final itemBreakdown = <String, Map<String, dynamic>>{};
+      for (var entry in pendingEntries) {
+        final itemKey = entry.categoryId;
+        if (!itemBreakdown.containsKey(itemKey)) {
+          itemBreakdown[itemKey] = {
+            'quantity': 0,
+            'rate': widget.dataService.ratePerCategory[itemKey] ?? 0.0,
+            'amount': 0.0,
+          };
+        }
+        final rate = widget.dataService.ratePerCategory[itemKey] ?? 0.0;
+        itemBreakdown[itemKey]!['quantity'] = (itemBreakdown[itemKey]!['quantity'] as int) + entry.quantity;
+        itemBreakdown[itemKey]!['amount'] = (itemBreakdown[itemKey]!['amount'] as double) + (rate * entry.quantity);
+      }
+
+      workerPaymentData[worker.id] = {
+        'worker': worker,
+        'pendingAmount': pendingAmount,
+        'totalEarned': totalEarned,
+        'totalPaid': totalPaid,
+        'periodStart': periodStart ?? DateTime.now(),
+        'periodEnd': periodEnd ?? DateTime.now(),
+        'workDays': pendingEntries.map((e) => e.date).toSet().length,
+        'itemBreakdown': itemBreakdown,
+        'payType': 'stitch',
+      };
     }
-    
-    print('Total workers with pending payments: ${workerPaymentData.length}');
-    
+
+    // ── 2. Daily-wage workers (attendance-based) ──────────────────────────
+    final dailyWagePending = widget.dataService.calculateDailyWagePending();
+    workerPaymentData.addAll(dailyWagePending);
+
     setState(() {
       _workerPaymentData = workerPaymentData;
       _loading = false;
@@ -367,8 +331,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
     final totalPaid = data['totalPaid'] as double;
     final periodStart = data['periodStart'] as DateTime;
     final periodEnd = data['periodEnd'] as DateTime;
-    final workDays = data['workDays'] as int;
+    final payType = data['payType'] as String? ?? 'stitch';
     final dateFormat = DateFormat('MMM dd, yyyy');
+    final isDailyWage = payType == 'daily_wage';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -404,8 +369,8 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     color: Colors.orange.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.person,
+                  child: Icon(
+                    isDailyWage ? Icons.schedule_rounded : Icons.person,
                     color: Colors.orange,
                     size: 24,
                   ),
@@ -425,24 +390,26 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          if (worker.category != null) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.purple.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                worker.category!.name,
-                                style: const TextStyle(
-                                  color: Colors.purple,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isDailyWage
+                                  ? Colors.blue.withOpacity(0.2)
+                                  : Colors.purple.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              isDailyWage
+                                  ? '₹${worker.dailyWage.toStringAsFixed(0)}/day'
+                                  : (worker.category?.name ?? 'Piece Rate'),
+                              style: TextStyle(
+                                color: isDailyWage ? Colors.blue : Colors.purple,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                          ],
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               worker.phoneNumber,
@@ -503,8 +470,10 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   children: [
                     Expanded(
                       child: _buildDetailItem(
-                        'Work Days',
-                        workDays.toString(),
+                        isDailyWage ? 'Present Days' : 'Work Days',
+                        isDailyWage
+                            ? '${data['presentDays']} full + ${data['halfDays']} half'
+                            : (data['workDays'] as int).toString(),
                         Icons.work_outline,
                       ),
                     ),
@@ -537,9 +506,49 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                
-                // Item Breakdown
-                if (data['itemBreakdown'] != null && (data['itemBreakdown'] as Map).isNotEmpty) ...[
+
+                // Breakdown
+                if (isDailyWage) ...[
+                  // Daily wage breakdown
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.schedule_rounded, size: 16, color: Colors.blue[700]),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Daily Wage Breakdown',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.blue[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        _wageRow('Full Day', '${data['presentDays']}',
+                            '× ₹${worker.dailyWage.toStringAsFixed(0)}',
+                            '₹${((data['presentDays'] as int) * worker.dailyWage).toStringAsFixed(0)}',
+                            const Color(0xFF50C878)),
+                        const SizedBox(height: 6),
+                        _wageRow('Half Day', '${data['halfDays']}',
+                            '× ₹${(worker.dailyWage * 0.5).toStringAsFixed(0)}',
+                            '₹${((data['halfDays'] as int) * worker.dailyWage * 0.5).toStringAsFixed(0)}',
+                            const Color(0xFFFF9500)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ] else if (data['itemBreakdown'] != null && (data['itemBreakdown'] as Map).isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -571,54 +580,25 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                           final quantity = itemData['quantity'] as int;
                           final rate = itemData['rate'] as double;
                           final amount = itemData['amount'] as double;
-                          
-                          // Extract item name from composite key
                           String itemName = itemKey;
                           if (itemKey.contains('_')) {
                             final parts = itemKey.split('_');
-                            if (parts.length > 1) {
-                              itemName = parts.sublist(1).join('_');
-                            }
+                            if (parts.length > 1) itemName = parts.sublist(1).join('_');
                           }
-                          
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
+                                Container(width: 6, height: 6,
+                                  decoration: const BoxDecoration(color: Colors.blue, shape: BoxShape.circle)),
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    itemName,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  '$quantity × ₹${rate.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
+                                Expanded(child: Text(itemName,
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+                                Text('$quantity × ₹${rate.toStringAsFixed(0)}',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                                 const SizedBox(width: 8),
-                                Text(
-                                  '₹${amount.toStringAsFixed(0)}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green,
-                                  ),
-                                ),
+                                Text('₹${amount.toStringAsFixed(0)}',
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green)),
                               ],
                             ),
                           );
@@ -628,43 +608,33 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                
+
                 // Payment Buttons
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          print('Razorpay payment initiated for worker ${worker.name}');
-                          _showRazorpayPayment(worker, pendingAmount, periodStart, periodEnd);
-                        },
+                        onPressed: () => _showRazorpayPayment(worker, pendingAmount, periodStart, periodEnd),
                         icon: const Icon(Icons.payment),
                         label: const Text('Pay via Razorpay'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () {
-                          print('Cash payment initiated for worker ${worker.name}');
-                          _showCashPaymentDialog(worker, pendingAmount, periodStart, periodEnd);
-                        },
+                        onPressed: () => _showCashPaymentDialog(worker, pendingAmount, periodStart, periodEnd),
                         icon: const Icon(Icons.money),
                         label: const Text('Cash Payment'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.green,
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ),
@@ -675,6 +645,20 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _wageRow(String label, String count, String rate, String total, Color color) {
+    return Row(
+      children: [
+        Container(width: 8, height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 8),
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
+        Text('$count $rate', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+        const SizedBox(width: 8),
+        Text(total, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+      ],
     );
   }
 
@@ -922,15 +906,9 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
   Future<void> _processCashPayment(Worker worker, double amount, DateTime periodStart, DateTime periodEnd) async {
     try {
       setState(() => _loading = true);
-      
-      print('\n=== Processing Cash Payment ===');
-      print('Worker: ${worker.name}');
-      print('Worker ID: ${worker.id}');
-      print('Amount: ₹$amount');
-      print('Period: ${periodStart.toString()} to ${periodEnd.toString()}');
-      
+
       // Create payment record
-      final payment = await widget.dataService.createPayment(
+      await widget.dataService.createPayment(
         workerId: worker.id,
         amount: amount,
         periodStart: periodStart,
@@ -938,24 +916,18 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         status: 'paid',
         paymentMethod: 'cash',
       );
-      
-      print('Payment created: ${payment?.id}');
-      print('Payment workerId: ${payment?.workerId}');
-      print('Payment amount: ₹${payment?.amount}');
-      
-      // Force refresh all data
-      print('Refreshing data...');
+
+      // Refresh all data (including attendance for daily-wage recalc)
       await widget.dataService.fetchPayments();
       await widget.dataService.fetchAllProduction();
       await widget.dataService.fetchWorkers();
-      
-      print('Data refreshed. Total payments: ${widget.dataService.payments.length}');
-      
+      await widget.dataService.fetchAllAttendance();
+
       // Recalculate pending payments
       _calculatePendingPayments();
-      
+
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Payment of ₹${amount.toStringAsFixed(2)} recorded successfully'),
@@ -964,7 +936,6 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         ),
       );
     } catch (e) {
-      print('ERROR processing payment: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

@@ -479,9 +479,12 @@ class _WorkersScreenState extends State<WorkersScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
-                          if (worker.category != null) ...[
+                          if (worker.category != null)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                               decoration: BoxDecoration(
@@ -497,29 +500,35 @@ class _WorkersScreenState extends State<WorkersScreen> {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
-                          ],
-                          Icon(Icons.phone, size: 14, color: Colors.grey[600]),
-                          const SizedBox(width: 4),
-                          Text(
-                            worker.phoneNumber,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          if (worker.dailyWage > 0) ...[
-                            const SizedBox(width: 10),
-                            Icon(Icons.currency_rupee, size: 13, color: Colors.teal[600]),
-                            Text(
-                              '${worker.dailyWage.toStringAsFixed(0)}/day',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.teal[600],
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.phone, size: 14, color: Colors.grey[600]),
+                              const SizedBox(width: 4),
+                              Text(
+                                worker.phoneNumber,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[600],
+                                ),
                               ),
+                            ],
+                          ),
+                          if (worker.dailyWage > 0)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.currency_rupee, size: 13, color: Colors.teal[600]),
+                                Text(
+                                  '${worker.dailyWage.toStringAsFixed(0)}/day',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.teal[600],
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -644,7 +653,7 @@ class _WorkersScreenState extends State<WorkersScreen> {
 }
 
 // Worker Details Screen
-class WorkerDetailsScreen extends StatelessWidget {
+class WorkerDetailsScreen extends StatefulWidget {
   final Worker worker;
   final Map<String, dynamic> stats;
   final DataService dataService;
@@ -656,6 +665,21 @@ class WorkerDetailsScreen extends StatelessWidget {
     required this.dataService,
   });
 
+  @override
+  State<WorkerDetailsScreen> createState() => _WorkerDetailsScreenState();
+}
+
+class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
+  late Worker _worker;
+  late Map<String, dynamic> _stats;
+
+  @override
+  void initState() {
+    super.initState();
+    _worker = widget.worker;
+    _stats = widget.stats;
+  }
+
   String _getItemName(String categoryId) {
     if (categoryId.contains('_')) {
       final parts = categoryId.split('_');
@@ -666,15 +690,97 @@ class WorkerDetailsScreen extends StatelessWidget {
     return categoryId;
   }
 
+  void _showSetWageDialog() {
+    final wageController = TextEditingController(
+      text: _worker.dailyWage > 0 ? _worker.dailyWage.toStringAsFixed(0) : '',
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.currency_rupee, color: Colors.teal),
+            ),
+            const SizedBox(width: 12),
+            const Text('Set Daily Wage'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Worker: ${_worker.name}', style: TextStyle(color: Colors.grey[700], fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: wageController,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Daily Wage (₹)',
+                prefixIcon: const Icon(Icons.currency_rupee),
+                hintText: 'e.g. 500',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Full day = full wage. Half day = 50%. Absent = ₹0.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          FilledButton.icon(
+            onPressed: () async {
+              final wage = double.tryParse(wageController.text.trim());
+              if (wage == null || wage < 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid amount')),
+                );
+                return;
+              }
+              Navigator.pop(ctx);
+              final updated = await widget.dataService.updateWorker(_worker.id, {'dailyWage': wage});
+              if (updated != null && mounted) {
+                setState(() => _worker = updated);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Daily wage updated to ₹${wage.toStringAsFixed(0)}/day'),
+                    backgroundColor: Colors.teal,
+                  ),
+                );
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to update wage'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            icon: const Icon(Icons.check),
+            label: const Text('Save'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.teal),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final pendingAmount = stats['pendingAmount'] as double;
-    final totalEarned = stats['totalEarned'] as double;
-    final totalPaid = stats['totalPaid'] as double;
-    final workDays = stats['workDays'] as int;
-    final totalProduction = stats['totalProduction'] as int;
-    final entries = stats['entries'] as List<StitchEntry>;
-    final payments = stats['payments'] as List<WorkerPayment>;
+    final pendingAmount = _stats['pendingAmount'] as double;
+    final totalEarned = _stats['totalEarned'] as double;
+    final totalPaid = _stats['totalPaid'] as double;
+    final workDays = _stats['workDays'] as int;
+    final totalProduction = _stats['totalProduction'] as int;
+    final entries = _stats['entries'] as List<StitchEntry>;
+    final payments = _stats['payments'] as List<WorkerPayment>;
     final dateFormat = DateFormat('MMM dd, yyyy');
 
     // Calculate item breakdown
@@ -684,11 +790,11 @@ class WorkerDetailsScreen extends StatelessWidget {
       if (!itemBreakdown.containsKey(itemKey)) {
         itemBreakdown[itemKey] = {
           'quantity': 0,
-          'rate': dataService.ratePerCategory[itemKey] ?? 0.0,
+          'rate': widget.dataService.ratePerCategory[itemKey] ?? 0.0,
           'amount': 0.0,
         };
       }
-      final rate = dataService.ratePerCategory[itemKey] ?? 0.0;
+      final rate = widget.dataService.ratePerCategory[itemKey] ?? 0.0;
       itemBreakdown[itemKey]!['quantity'] = (itemBreakdown[itemKey]!['quantity'] as int) + entry.quantity;
       itemBreakdown[itemKey]!['amount'] = (itemBreakdown[itemKey]!['amount'] as double) + (rate * entry.quantity);
     }
@@ -700,12 +806,19 @@ class WorkerDetailsScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.black54),
         title: Text(
-          worker.name,
+          _worker.name,
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.black87,
           ),
         ),
+        actions: [
+          IconButton(
+            onPressed: _showSetWageDialog,
+            icon: const Icon(Icons.currency_rupee_rounded, color: Colors.teal),
+            tooltip: 'Set Daily Wage',
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -739,7 +852,7 @@ class WorkerDetailsScreen extends StatelessWidget {
                     radius: 40,
                     backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
                     child: Text(
-                      worker.name.substring(0, 1).toUpperCase(),
+                      _worker.name.substring(0, 1).toUpperCase(),
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
@@ -750,7 +863,7 @@ class WorkerDetailsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  worker.name,
+                  _worker.name,
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -758,7 +871,59 @@ class WorkerDetailsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                if (worker.category != null)
+                // Daily wage badge
+                if (_worker.dailyWage > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.schedule_rounded, size: 14, color: Colors.teal),
+                        const SizedBox(width: 4),
+                        Text(
+                          '₹${_worker.dailyWage.toStringAsFixed(0)}/day',
+                          style: const TextStyle(
+                            color: Colors.teal,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  GestureDetector(
+                    onTap: _showSetWageDialog,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add_circle_outline, size: 14, color: Colors.orange),
+                          SizedBox(width: 4),
+                          Text(
+                            'Tap to set daily wage',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (_worker.category != null) ...[
+                  const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     decoration: BoxDecoration(
@@ -766,7 +931,7 @@ class WorkerDetailsScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      worker.category!.name,
+                      _worker.category!.name,
                       style: const TextStyle(
                         color: Colors.purple,
                         fontSize: 14,
@@ -774,12 +939,13 @@ class WorkerDetailsScreen extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
-                _buildInfoRow(Icons.phone, 'Phone', worker.phoneNumber),
+                _buildInfoRow(Icons.phone, 'Phone', _worker.phoneNumber),
                 const SizedBox(height: 12),
-                _buildInfoRow(Icons.email, 'Email', worker.email ?? 'N/A'),
+                _buildInfoRow(Icons.email, 'Email', _worker.email ?? 'N/A'),
                 const SizedBox(height: 12),
                 _buildInfoRow(
                   Icons.calendar_today,

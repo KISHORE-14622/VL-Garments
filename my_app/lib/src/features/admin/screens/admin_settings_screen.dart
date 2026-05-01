@@ -64,8 +64,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Implement API call to update profile
-      await Future.delayed(const Duration(seconds: 1));
+      await widget.authService.updateProfile(
+        name: _nameController.text.trim(),
+        email: _emailController.text.trim(),
+      );
       
       if (!mounted) return;
       
@@ -81,7 +83,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to update profile: $e'),
+          content: Text('Failed to update profile: ${e.toString().replaceFirst('Exception: ', '')}'),
           backgroundColor: Colors.red,
         ),
       );
@@ -108,8 +110,10 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Implement API call to change password
-      await Future.delayed(const Duration(seconds: 1));
+      await widget.authService.changePassword(
+        currentPassword: _currentPasswordController.text,
+        newPassword: _newPasswordController.text,
+      );
       
       if (!mounted) return;
       
@@ -128,7 +132,7 @@ class _AdminSettingsScreenState extends State<AdminSettingsScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to change password: $e'),
+          content: Text('Failed to change password: ${e.toString().replaceFirst('Exception: ', '')}'),
           backgroundColor: Colors.red,
         ),
       );

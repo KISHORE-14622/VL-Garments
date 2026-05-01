@@ -44,6 +44,10 @@ dependencies:
   local_auth: ^2.3.0
   shared_preferences: ^2.3.3
 
+  # File export
+  path_provider: ^2.1.4
+  share_plus: ^10.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

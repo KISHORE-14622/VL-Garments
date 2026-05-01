@@ -21,6 +21,12 @@ import workerRoutes from './routes/workers.js';
 import stitchEntryRoutes from './routes/stitchEntries.js';
 import workerCategoryRoutes from './routes/workerCategories.js';
 import attendanceRoutes from './routes/attendance.js';
+import completedProductionRoutes from './routes/completedProduction.js';
+import brandRoutes from './routes/brands.js';
+import gstSettingsRoutes from './routes/gstSettings.js';
+import billingRoutes from './routes/billing.js';
+import gstSummaryRoutes from './routes/gstSummary.js';
+import exportRoutes from './routes/exports.js';
 
 const app = express();
 
@@ -40,6 +46,12 @@ app.use('/api/workers', workerRoutes);
 app.use('/api/stitch-entries', stitchEntryRoutes);
 app.use('/api/worker-categories', workerCategoryRoutes);
 app.use('/api/attendance', attendanceRoutes);
+app.use('/api/completed-production', completedProductionRoutes);
+app.use('/api/brands', brandRoutes);
+app.use('/api/gst-settings', gstSettingsRoutes);
+app.use('/api/billing', billingRoutes);
+app.use('/api/gst-summary', gstSummaryRoutes);
+app.use('/api/exports', exportRoutes);
 
 // Welcome route
 app.get('/', (req, res) => {

@@ -7,7 +7,12 @@ export default async function connectDB() {
     process.exit(1);
   }
   try {
-    await mongoose.connect(uri, { dbName: 'vijayalakshmi' });
+    await mongoose.connect(uri, {
+      dbName: 'vijayalakshmi',
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
     console.log('MongoDB connected');
   } catch (err) {
     console.error('MongoDB connection error', err);

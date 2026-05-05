@@ -30,6 +30,7 @@ class Worker {
       'id': id,
       'name': name,
       'phoneNumber': phoneNumber,
+      'email': email,
       'address': address,
       'notes': notes,
       'joinedDate': joinedDate.toIso8601String(),

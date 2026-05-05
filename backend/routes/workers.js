@@ -37,11 +37,12 @@ router.post(
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
     try {
-      const { name, phoneNumber, address, notes, category, dailyWage } = req.body;
+      const { name, phoneNumber, email, address, notes, category, dailyWage } = req.body;
 
       const worker = await Worker.create({
         name,
         phoneNumber,
+        email,
         address,
         notes,
         joinedDate: new Date(),
@@ -61,8 +62,8 @@ router.post(
 // Update worker
 router.put('/:id', async (req, res) => {
   try {
-    const { name, phoneNumber, address, notes, isActive, category, dailyWage } = req.body;
-    const updateData = { name, phoneNumber, address, notes, isActive, category };
+    const { name, phoneNumber, email, address, notes, isActive, category, dailyWage } = req.body;
+    const updateData = { name, phoneNumber, email, address, notes, isActive, category };
     if (dailyWage !== undefined) updateData.dailyWage = dailyWage;
     await Worker.findByIdAndUpdate(
       req.params.id,

@@ -31,6 +31,7 @@ class _WorkersScreenState extends State<WorkersScreen> {
       await widget.dataService.fetchWorkers();
       await widget.dataService.fetchWorkerCategories();
       await widget.dataService.fetchAllProduction();
+      await widget.dataService.fetchAllAttendance();
       await widget.dataService.fetchPayments();
       await widget.dataService.syncRatesFromServer();
     } catch (e) {
@@ -47,8 +48,26 @@ class _WorkersScreenState extends State<WorkersScreen> {
         .where((entry) => entry.workerId == worker.id)
         .toList();
 
-    // Calculate total earned
-    final totalEarned = widget.dataService.calculateAmountForEntries(workerEntries);
+    // Get attendance records
+    final workerAttendance = widget.dataService.allAttendanceRecords
+        .where((r) => r.workerId == worker.id)
+        .toList();
+
+    // Calculate total earned from stitch
+    double totalEarned = widget.dataService.calculateAmountForEntries(workerEntries);
+
+    // Calculate total earned from attendance
+    int presentDays = 0;
+    int halfDays = 0;
+    for (final r in workerAttendance) {
+      if (r.status == 'present') {
+        totalEarned += worker.dailyWage;
+        presentDays++;
+      } else if (r.status == 'half-day') {
+        totalEarned += worker.dailyWage * 0.5;
+        halfDays++;
+      }
+    }
 
     // Calculate total paid
     final paidPayments = widget.dataService.payments
@@ -59,8 +78,17 @@ class _WorkersScreenState extends State<WorkersScreen> {
     // Calculate pending
     final pendingAmount = totalEarned - totalPaid;
 
-    // Get work days
-    final workDays = workerEntries.map((e) => e.date).toSet().length;
+    // Get work days from both stitch entries and attendance
+    final allDates = <String>{};
+    for (final e in workerEntries) {
+       allDates.add('${e.date.year}-${e.date.month}-${e.date.day}');
+    }
+    for (final a in workerAttendance) {
+       if (a.status == 'present' || a.status == 'half-day') {
+         allDates.add('${a.date.year}-${a.date.month}-${a.date.day}');
+       }
+    }
+    final workDays = allDates.length;
 
     // Get total production
     final totalProduction = workerEntries.fold<int>(0, (sum, e) => sum + e.quantity);
@@ -72,7 +100,10 @@ class _WorkersScreenState extends State<WorkersScreen> {
       'workDays': workDays,
       'totalProduction': totalProduction,
       'entries': workerEntries,
+      'attendance': workerAttendance,
       'payments': paidPayments,
+      'presentDays': presentDays,
+      'halfDays': halfDays,
     };
   }
 
@@ -690,6 +721,36 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     return categoryId;
   }
 
+  void _deleteWorker() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Worker?'),
+        content: Text('Are you sure you want to delete ${_worker.name}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx); // Close dialog
+              final success = await widget.dataService.removeWorker(_worker.id);
+              if (success && mounted) {
+                Navigator.pop(context); // Go back to workers list
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Worker deleted successfully')),
+                );
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to delete worker'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showSetWageDialog() {
     final wageController = TextEditingController(
       text: _worker.dailyWage > 0 ? _worker.dailyWage.toStringAsFixed(0) : '',
@@ -817,6 +878,11 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
             onPressed: _showSetWageDialog,
             icon: const Icon(Icons.currency_rupee_rounded, color: Colors.teal),
             tooltip: 'Set Daily Wage',
+          ),
+          IconButton(
+            onPressed: _deleteWorker,
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            tooltip: 'Delete Worker',
           ),
         ],
       ),
@@ -950,7 +1016,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                 _buildInfoRow(
                   Icons.calendar_today,
                   'Work Days',
-                  '$workDays days',
+                  '$workDays days (Present: ${_stats['presentDays'] ?? 0}, Half: ${_stats['halfDays'] ?? 0})',
                 ),
               ],
             ),

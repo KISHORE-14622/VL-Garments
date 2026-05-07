@@ -36,6 +36,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentTab = 0;
   bool _loading = true;
+  bool _initialLoadDone = false;
   DateTime? _lastBackPress;
 
   @override
@@ -45,7 +46,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 
   Future<void> _loadAll() async {
-    setState(() => _loading = true);
+    if (!_initialLoadDone) {
+      setState(() => _loading = true);
+    }
     try { await widget.dataService.fetchWorkers(); } catch (_) {}
     try { await widget.dataService.syncRatesFromServer(); } catch (_) {}
     try { await widget.dataService.fetchAllProduction(); } catch (_) {}
@@ -53,6 +56,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     try { await widget.dataService.fetchWorkerCategories(); } catch (_) {}
     try { await widget.dataService.fetchAllAttendance(); } catch (_) {}
     if (!mounted) return;
+    _initialLoadDone = true;
     setState(() => _loading = false);
   }
 

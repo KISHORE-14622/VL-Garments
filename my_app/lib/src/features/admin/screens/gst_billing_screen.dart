@@ -73,7 +73,7 @@ class _GstBillingTabState extends State<GstBillingTab> {
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         child: Container(
-          width: 400,
+          constraints: const BoxConstraints(maxWidth: 400),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
           child: SingleChildScrollView(
@@ -217,7 +217,7 @@ class _GstBillingTabState extends State<GstBillingTab> {
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         child: Container(
-          width: 400,
+          constraints: const BoxConstraints(maxWidth: 400),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(4)),
           child: SingleChildScrollView(
@@ -457,13 +457,28 @@ class _GstBillingTabState extends State<GstBillingTab> {
           const SizedBox(height: 20),
 
           // Summary stats
-          Row(children: [
-            Expanded(child: _statCard('Taxable', '₹${totalTaxable.toStringAsFixed(0)}', Icons.attach_money, const Color(0xFF4A90E2))),
-            const SizedBox(width: 10),
-            Expanded(child: _statCard('Total GST', '₹${totalGst.toStringAsFixed(0)}', Icons.account_balance, const Color(0xFFFF9500))),
-            const SizedBox(width: 10),
-            Expanded(child: _statCard('Grand Total', '₹${totalGrand.toStringAsFixed(0)}', Icons.receipt, const Color(0xFF50C878))),
-          ]),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 450) {
+                return Column(
+                  children: [
+                    _statCard('Taxable', '₹${totalTaxable.toStringAsFixed(0)}', Icons.attach_money, const Color(0xFF4A90E2)),
+                    const SizedBox(height: 10),
+                    _statCard('Total GST', '₹${totalGst.toStringAsFixed(0)}', Icons.account_balance, const Color(0xFFFF9500)),
+                    const SizedBox(height: 10),
+                    _statCard('Grand Total', '₹${totalGrand.toStringAsFixed(0)}', Icons.receipt, const Color(0xFF50C878)),
+                  ],
+                );
+              }
+              return Row(children: [
+                Expanded(child: _statCard('Taxable', '₹${totalTaxable.toStringAsFixed(0)}', Icons.attach_money, const Color(0xFF4A90E2))),
+                const SizedBox(width: 10),
+                Expanded(child: _statCard('Total GST', '₹${totalGst.toStringAsFixed(0)}', Icons.account_balance, const Color(0xFFFF9500))),
+                const SizedBox(width: 10),
+                Expanded(child: _statCard('Grand Total', '₹${totalGrand.toStringAsFixed(0)}', Icons.receipt, const Color(0xFF50C878))),
+              ]);
+            }
+          ),
           const SizedBox(height: 24),
 
           // Individual bills

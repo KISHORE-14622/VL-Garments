@@ -611,35 +611,68 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                 ],
 
                 // Payment Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => _showRazorpayPayment(worker, pendingAmount, periodStart, periodEnd),
-                        icon: const Icon(Icons.payment),
-                        label: const Text('Pay via Razorpay'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    if (constraints.maxWidth < 400) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () => _showRazorpayPayment(worker, pendingAmount, periodStart, periodEnd),
+                            icon: const Icon(Icons.payment),
+                            label: const Text('Pay via Razorpay'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          OutlinedButton.icon(
+                            onPressed: () => _showCashPaymentDialog(worker, pendingAmount, periodStart, periodEnd),
+                            icon: const Icon(Icons.money),
+                            label: const Text('Cash Payment'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.green,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ],
+                      );
+                    }
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () => _showRazorpayPayment(worker, pendingAmount, periodStart, periodEnd),
+                            icon: const Icon(Icons.payment),
+                            label: const Text('Pay via Razorpay'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _showCashPaymentDialog(worker, pendingAmount, periodStart, periodEnd),
-                        icon: const Icon(Icons.money),
-                        label: const Text('Cash Payment'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.green,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => _showCashPaymentDialog(worker, pendingAmount, periodStart, periodEnd),
+                            icon: const Icon(Icons.money),
+                            label: const Text('Cash Payment'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.green,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  }
                 ),
               ],
             ),

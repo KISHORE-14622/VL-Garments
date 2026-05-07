@@ -1394,32 +1394,68 @@ class _DashboardTab extends StatelessWidget {
               icon: Icons.trending_up_rounded,
               iconColor: const Color(0xFF4A90E2),
               title: 'Production Trends',
-              child: Row(children: [
-                Expanded(child: _trendItem(
-                  'Today',
-                  dataService.stitchEntries
-                      .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 1))))
-                      .fold<int>(0, (s, e) => s + e.quantity)
-                      .toString(),
-                  Icons.today, const Color(0xFF50C878),
-                )),
-                Expanded(child: _trendItem(
-                  'This Week',
-                  dataService.stitchEntries
-                      .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 7))))
-                      .fold<int>(0, (s, e) => s + e.quantity)
-                      .toString(),
-                  Icons.date_range, const Color(0xFF4A90E2),
-                )),
-                Expanded(child: _trendItem(
-                  'This Month',
-                  dataService.stitchEntries
-                      .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 30))))
-                      .fold<int>(0, (s, e) => s + e.quantity)
-                      .toString(),
-                  Icons.calendar_today, const Color(0xFF9B59B6),
-                )),
-              ]),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 350) {
+                    return Column(
+                      children: [
+                        _trendItem(
+                          'Today',
+                          dataService.stitchEntries
+                              .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 1))))
+                              .fold<int>(0, (s, e) => s + e.quantity)
+                              .toString(),
+                          Icons.today, const Color(0xFF50C878),
+                        ),
+                        const SizedBox(height: 16),
+                        _trendItem(
+                          'This Week',
+                          dataService.stitchEntries
+                              .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 7))))
+                              .fold<int>(0, (s, e) => s + e.quantity)
+                              .toString(),
+                          Icons.date_range, const Color(0xFF4A90E2),
+                        ),
+                        const SizedBox(height: 16),
+                        _trendItem(
+                          'This Month',
+                          dataService.stitchEntries
+                              .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 30))))
+                              .fold<int>(0, (s, e) => s + e.quantity)
+                              .toString(),
+                          Icons.calendar_today, const Color(0xFF9B59B6),
+                        ),
+                      ],
+                    );
+                  }
+                  return Row(children: [
+                    Expanded(child: _trendItem(
+                      'Today',
+                      dataService.stitchEntries
+                          .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 1))))
+                          .fold<int>(0, (s, e) => s + e.quantity)
+                          .toString(),
+                      Icons.today, const Color(0xFF50C878),
+                    )),
+                    Expanded(child: _trendItem(
+                      'This Week',
+                      dataService.stitchEntries
+                          .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 7))))
+                          .fold<int>(0, (s, e) => s + e.quantity)
+                          .toString(),
+                      Icons.date_range, const Color(0xFF4A90E2),
+                    )),
+                    Expanded(child: _trendItem(
+                      'This Month',
+                      dataService.stitchEntries
+                          .where((e) => e.date.isAfter(DateTime.now().subtract(const Duration(days: 30))))
+                          .fold<int>(0, (s, e) => s + e.quantity)
+                          .toString(),
+                      Icons.calendar_today, const Color(0xFF9B59B6),
+                    )),
+                  ]);
+                }
+              ),
             ),
             const SizedBox(height: 16),
 

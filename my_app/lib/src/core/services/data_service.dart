@@ -12,6 +12,8 @@ import '../models/completed_product.dart';
 import '../models/brand.dart';
 import '../models/gst_setting.dart';
 import '../models/gst_summary.dart';
+import '../models/supplier.dart';
+import '../models/inventory_type.dart';
 import 'auth_service.dart';
 
 class DataService {
@@ -30,6 +32,8 @@ class DataService {
   final List<AttendanceRecord> attendanceRecords = [];
   final List<CompletedProduct> completedProducts = [];
   final List<Brand> brands = [];
+  final List<Supplier> suppliers = [];
+  final List<InventoryType> inventoryTypes = [];
   GstSetting? gstSetting;
   List<BrandBill> brandBills = [];
   GstSummary? gstSummary;
@@ -548,6 +552,50 @@ class DataService {
     return null;
   }
 
+  // Update a production entry
+  Future<StitchEntry?> updateProductionEntry(String entryId, Map<String, dynamic> updates) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/production/$entryId';
+      final res = await http.put(
+        Uri.parse(url),
+        headers: auth.authHeaders,
+        body: jsonEncode(updates),
+      );
+      if (res.statusCode == 200) {
+        final e = jsonDecode(res.body) as Map<String, dynamic>;
+        final updated = StitchEntry(
+          id: (e['_id'] ?? '').toString(),
+          workerId: ((e['worker'] ?? '')).toString().isNotEmpty ? (e['worker'] ?? '').toString() : 'unknown',
+          createdBy: ((e['staff'] ?? auth.currentUser?.id ?? '')).toString(),
+          categoryId: (e['category'] ?? '').toString(),
+          quantity: (e['quantity'] is num) ? (e['quantity'] as num).toInt() : int.tryParse(e['quantity']?.toString() ?? '0') ?? 0,
+          date: DateTime.tryParse((e['date'] ?? '').toString()) ?? DateTime.now(),
+        );
+        final idx = stitchEntries.indexWhere((s) => s.id == entryId);
+        if (idx != -1) stitchEntries[idx] = updated;
+        return updated;
+      }
+    } catch (e) {
+      print('Error updating production entry: $e');
+    }
+    return null;
+  }
+
+  // Delete a production entry
+  Future<bool> deleteProductionEntry(String entryId) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/production/$entryId';
+      final res = await http.delete(Uri.parse(url), headers: auth.authHeaders);
+      if (res.statusCode == 200) {
+        stitchEntries.removeWhere((s) => s.id == entryId);
+        return true;
+      }
+    } catch (e) {
+      print('Error deleting production entry: $e');
+    }
+    return false;
+  }
+
   Future<List<dynamic>> fetchProducts() async {
     final url = '${dotenv.env['API_URL']}/products';
     final res = await http.get(Uri.parse(url));
@@ -623,6 +671,12 @@ class DataService {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
     throw Exception('Failed to upsert rate: ${res.statusCode}');
+  }
+
+  Future<bool> deleteRate(String category) async {
+    final url = '${dotenv.env['API_URL']}/rates/${Uri.encodeComponent(category)}';
+    final res = await http.delete(Uri.parse(url), headers: auth.authHeaders);
+    return res.statusCode == 200;
   }
 
   // Get worker by ID
@@ -1152,6 +1206,115 @@ class DataService {
     }
     return null;
   }
-}
 
+  // ========== SUPPLIERS ==========
+  Future<void> fetchSuppliers() async {
+    try {
+      final url = '${dotenv.env['API_URL']}/suppliers';
+      final response = await http.get(Uri.parse(url), headers: auth.authHeaders);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        suppliers..clear()..addAll(data.map((e) => Supplier.fromJson(e as Map<String, dynamic>)));
+      }
+    } catch (e) {
+      print('Error fetching suppliers: $e');
+    }
+  }
+
+  Future<Supplier?> addSupplier(String name) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/suppliers';
+      final res = await http.post(Uri.parse(url), headers: auth.authHeaders, body: jsonEncode({'name': name}));
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        final s = Supplier.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+        suppliers.add(s);
+        suppliers.sort((a, b) => a.name.compareTo(b.name));
+        return s;
+      }
+    } catch (e) { print('Error adding supplier: $e'); }
+    return null;
+  }
+
+  Future<Supplier?> updateSupplier(String id, String name) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/suppliers/$id';
+      final res = await http.put(Uri.parse(url), headers: auth.authHeaders, body: jsonEncode({'name': name}));
+      if (res.statusCode == 200) {
+        final s = Supplier.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+        final index = suppliers.indexWhere((e) => e.id == id);
+        if (index != -1) suppliers[index] = s;
+        suppliers.sort((a, b) => a.name.compareTo(b.name));
+        return s;
+      }
+    } catch (e) { print('Error updating supplier: $e'); }
+    return null;
+  }
+
+  Future<bool> deleteSupplier(String id) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/suppliers/$id';
+      final res = await http.delete(Uri.parse(url), headers: auth.authHeaders);
+      if (res.statusCode == 200) {
+        suppliers.removeWhere((e) => e.id == id);
+        return true;
+      }
+    } catch (e) { print('Error deleting supplier: $e'); }
+    return false;
+  }
+
+  // ========== INVENTORY TYPES ==========
+  Future<void> fetchInventoryTypes() async {
+    try {
+      final url = '${dotenv.env['API_URL']}/inventory-types';
+      final response = await http.get(Uri.parse(url), headers: auth.authHeaders);
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        inventoryTypes..clear()..addAll(data.map((e) => InventoryType.fromJson(e as Map<String, dynamic>)));
+      }
+    } catch (e) {
+      print('Error fetching inventory types: $e');
+    }
+  }
+
+  Future<InventoryType?> addInventoryType(String name) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/inventory-types';
+      final res = await http.post(Uri.parse(url), headers: auth.authHeaders, body: jsonEncode({'name': name}));
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        final i = InventoryType.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+        inventoryTypes.add(i);
+        inventoryTypes.sort((a, b) => a.name.compareTo(b.name));
+        return i;
+      }
+    } catch (e) { print('Error adding inventory type: $e'); }
+    return null;
+  }
+
+  Future<InventoryType?> updateInventoryType(String id, String name) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/inventory-types/$id';
+      final res = await http.put(Uri.parse(url), headers: auth.authHeaders, body: jsonEncode({'name': name}));
+      if (res.statusCode == 200) {
+        final i = InventoryType.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+        final index = inventoryTypes.indexWhere((e) => e.id == id);
+        if (index != -1) inventoryTypes[index] = i;
+        inventoryTypes.sort((a, b) => a.name.compareTo(b.name));
+        return i;
+      }
+    } catch (e) { print('Error updating inventory type: $e'); }
+    return null;
+  }
+
+  Future<bool> deleteInventoryType(String id) async {
+    try {
+      final url = '${dotenv.env['API_URL']}/inventory-types/$id';
+      final res = await http.delete(Uri.parse(url), headers: auth.authHeaders);
+      if (res.statusCode == 200) {
+        inventoryTypes.removeWhere((e) => e.id == id);
+        return true;
+      }
+    } catch (e) { print('Error deleting inventory type: $e'); }
+    return false;
+  }
+}
 

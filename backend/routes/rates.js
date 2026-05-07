@@ -39,6 +39,21 @@ router.post('/', [body('category').notEmpty(), body('amount').isNumeric()], asyn
   }
 });
 
-export default router;
+router.delete('/:category', authRequired, adminOnly, async (req, res) => {
+  try {
+    const category = req.params.category;
+    console.log(`🗑️ Deleting rate for ${category}`);
+    
+    const deleted = await Rate.findOneAndDelete({ category });
+    if (!deleted) {
+      return res.status(404).json({ message: 'Rate not found' });
+    }
+    res.json({ message: 'Rate deleted successfully' });
+  } catch (error) {
+    console.error('❌ Error deleting rate:', error);
+    res.status(500).json({ message: 'Failed to delete rate', error: error.message });
+  }
+});
 
+export default router;
 

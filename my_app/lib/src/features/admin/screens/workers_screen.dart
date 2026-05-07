@@ -4,6 +4,7 @@ import '../../../core/models/worker.dart';
 import '../../../core/models/stitch.dart';
 import '../../../core/models/payment.dart';
 import '../../../core/services/data_service.dart';
+import '../../../core/widgets/vl_loading.dart';
 
 class WorkersScreen extends StatefulWidget {
   final DataService dataService;
@@ -295,6 +296,262 @@ class _WorkersScreenState extends State<WorkersScreen> {
     );
   }
 
+  void _showEditWorkerDialog(Worker worker) {
+    final nameController = TextEditingController(text: worker.name);
+    final phoneController = TextEditingController(text: worker.phoneNumber);
+    final emailController = TextEditingController(text: worker.email ?? '');
+    final addressController = TextEditingController(text: worker.address ?? '');
+    final notesController = TextEditingController(text: worker.notes ?? '');
+    final wageController = TextEditingController(
+      text: worker.dailyWage > 0 ? worker.dailyWage.toStringAsFixed(0) : '',
+    );
+    String? selectedCategoryId = worker.category?.id;
+    final cats = widget.dataService.workerCategories;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setDlg) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.edit, color: Colors.blue),
+                ),
+                const SizedBox(width: 12),
+                const Text('Edit Worker'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Phone *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.phone),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.email),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (cats.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Category',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.category),
+                      ),
+                      value: cats.any((c) => c.id == selectedCategoryId) ? selectedCategoryId : null,
+                      items: cats.map((c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.name),
+                      )).toList(),
+                      onChanged: (v) => setDlg(() => selectedCategoryId = v),
+                    ),
+                  if (cats.isNotEmpty) const SizedBox(height: 14),
+                  TextField(
+                    controller: wageController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Daily Wage (₹)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.currency_rupee),
+                      hintText: 'e.g. 300',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: addressController,
+                    decoration: InputDecoration(
+                      labelText: 'Address',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.location_on),
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: notesController,
+                    decoration: InputDecoration(
+                      labelText: 'Notes',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.note),
+                    ),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  final phone = phoneController.text.trim();
+                  if (name.isEmpty || phone.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Name and phone are required')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+                  setState(() => _loading = true);
+
+                  final updates = <String, dynamic>{
+                    'name': name,
+                    'phoneNumber': phone,
+                    'email': emailController.text.trim().isEmpty ? null : emailController.text.trim(),
+                    'address': addressController.text.trim().isEmpty ? null : addressController.text.trim(),
+                    'notes': notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                    'dailyWage': double.tryParse(wageController.text.trim()) ?? 0,
+                  };
+                  if (selectedCategoryId != null && selectedCategoryId!.isNotEmpty) {
+                    updates['category'] = selectedCategoryId;
+                  }
+
+                  final result = await widget.dataService.updateWorker(worker.id, updates);
+                  if (result != null) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Worker "${result.name}" updated successfully'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to update worker'), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
+                  await _loadData();
+                },
+                icon: const Icon(Icons.check),
+                label: const Text('Save'),
+                style: FilledButton.styleFrom(backgroundColor: Colors.blue),
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  void _confirmDeleteWorker(Worker worker) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+            ),
+            const SizedBox(width: 12),
+            const Text('Delete Worker?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to delete "${worker.name}"?',
+              style: const TextStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.2)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.red),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This action cannot be undone. All associated production and payment data will be lost.',
+                      style: TextStyle(fontSize: 12, color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              setState(() => _loading = true);
+              final success = await widget.dataService.removeWorker(worker.id);
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('"${worker.name}" deleted successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to delete worker'), backgroundColor: Colors.red),
+                );
+              }
+              await _loadData();
+            },
+            icon: const Icon(Icons.delete),
+            label: const Text('Delete'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredWorkers = _getFilteredWorkers();
@@ -329,7 +586,7 @@ class _WorkersScreenState extends State<WorkersScreen> {
         foregroundColor: Colors.white,
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const VLLoadingIndicator(message: 'LOADING WORKERS...')
           : Column(
               children: [
                 // Search and Filter Section
@@ -638,11 +895,46 @@ class _WorkersScreenState extends State<WorkersScreen> {
                     ],
                   ],
                 ),
-                const SizedBox(width: 8),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  size: 16,
-                  color: Colors.grey[400],
+                const SizedBox(width: 4),
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert,
+                    size: 20,
+                    color: Colors.grey[500],
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  onSelected: (value) {
+                    if (value == 'edit') {
+                      _showEditWorkerDialog(worker);
+                    } else if (value == 'delete') {
+                      _confirmDeleteWorker(worker);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 20, color: Colors.blue[700]),
+                          const SizedBox(width: 12),
+                          const Text('Edit Worker'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, size: 20, color: Colors.red[700]),
+                          const SizedBox(width: 12),
+                          const Text('Delete Worker', style: TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -709,6 +1001,174 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
     super.initState();
     _worker = widget.worker;
     _stats = widget.stats;
+  }
+
+  void _showEditWorkerDialog() {
+    final nameController = TextEditingController(text: _worker.name);
+    final phoneController = TextEditingController(text: _worker.phoneNumber);
+    final emailController = TextEditingController(text: _worker.email ?? '');
+    final addressController = TextEditingController(text: _worker.address ?? '');
+    final notesController = TextEditingController(text: _worker.notes ?? '');
+    final wageController = TextEditingController(
+      text: _worker.dailyWage > 0 ? _worker.dailyWage.toStringAsFixed(0) : '',
+    );
+    String? selectedCategoryId = _worker.category?.id;
+    final cats = widget.dataService.workerCategories;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setDlg) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.edit, color: Colors.blue),
+                ),
+                const SizedBox(width: 12),
+                const Text('Edit Worker'),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: 'Name *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.person),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: phoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Phone *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.phone),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.email),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (cats.isNotEmpty)
+                    DropdownButtonFormField<String>(
+                      decoration: InputDecoration(
+                        labelText: 'Category',
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        prefixIcon: const Icon(Icons.category),
+                      ),
+                      value: cats.any((c) => c.id == selectedCategoryId) ? selectedCategoryId : null,
+                      items: cats.map((c) => DropdownMenuItem(
+                        value: c.id,
+                        child: Text(c.name),
+                      )).toList(),
+                      onChanged: (v) => setDlg(() => selectedCategoryId = v),
+                    ),
+                  if (cats.isNotEmpty) const SizedBox(height: 14),
+                  TextField(
+                    controller: wageController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Daily Wage (₹)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.currency_rupee),
+                      hintText: 'e.g. 300',
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: addressController,
+                    decoration: InputDecoration(
+                      labelText: 'Address',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.location_on),
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: notesController,
+                    decoration: InputDecoration(
+                      labelText: 'Notes',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.note),
+                    ),
+                    maxLines: 2,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton.icon(
+                onPressed: () async {
+                  final name = nameController.text.trim();
+                  final phone = phoneController.text.trim();
+                  if (name.isEmpty || phone.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Name and phone are required')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+
+                  final updates = <String, dynamic>{
+                    'name': name,
+                    'phoneNumber': phone,
+                    'email': emailController.text.trim().isEmpty ? null : emailController.text.trim(),
+                    'address': addressController.text.trim().isEmpty ? null : addressController.text.trim(),
+                    'notes': notesController.text.trim().isEmpty ? null : notesController.text.trim(),
+                    'dailyWage': double.tryParse(wageController.text.trim()) ?? 0,
+                  };
+                  if (selectedCategoryId != null && selectedCategoryId!.isNotEmpty) {
+                    updates['category'] = selectedCategoryId;
+                  }
+
+                  final result = await widget.dataService.updateWorker(_worker.id, updates);
+                  if (result != null && mounted) {
+                    setState(() => _worker = result);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Worker "${result.name}" updated successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to update worker'), backgroundColor: Colors.red),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.check),
+                label: const Text('Save'),
+                style: FilledButton.styleFrom(backgroundColor: Colors.blue),
+              ),
+            ],
+          );
+        });
+      },
+    );
   }
 
   String _getItemName(String categoryId) {
@@ -874,6 +1334,11 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            onPressed: _showEditWorkerDialog,
+            icon: const Icon(Icons.edit_outlined, color: Colors.blue),
+            tooltip: 'Edit Worker',
+          ),
           IconButton(
             onPressed: _showSetWageDialog,
             icon: const Icon(Icons.currency_rupee_rounded, color: Colors.teal),

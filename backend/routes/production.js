@@ -32,6 +32,34 @@ router.post(
   }
 );
 
+// Admin: update a production entry
+router.put('/:id', authRequired, adminOnly, async (req, res) => {
+  try {
+    const { category, quantity, date, worker } = req.body;
+    const updates = {};
+    if (category !== undefined) updates.category = category;
+    if (quantity !== undefined) updates.quantity = quantity;
+    if (date !== undefined) updates.date = date;
+    if (worker !== undefined) updates.worker = worker;
+    const doc = await Production.findByIdAndUpdate(req.params.id, updates, { new: true });
+    if (!doc) return res.status(404).json({ error: 'Entry not found' });
+    res.json(doc);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Admin: delete a production entry
+router.delete('/:id', authRequired, adminOnly, async (req, res) => {
+  try {
+    const doc = await Production.findByIdAndDelete(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Entry not found' });
+    res.json({ message: 'Deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/weekly-total/:staffId', authRequired, async (req, res) => {
   const { staffId } = req.params;
   const since = new Date();

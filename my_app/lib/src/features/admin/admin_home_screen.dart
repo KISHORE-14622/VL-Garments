@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/models/worker.dart';
@@ -15,6 +16,7 @@ import 'screens/worker_rate_management_screen.dart';
 import 'screens/admin_settings_screen.dart';
 import 'screens/workers_screen.dart';
 import '../shop/shop_home_screen.dart';
+import '../../core/widgets/vl_loading.dart';
 
 // ═══════════════════════════════════════════════════════
 //  MAIN SCREEN — Bottom nav with Home + Dashboard + Attendance tabs
@@ -34,6 +36,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentTab = 0;
   bool _loading = true;
+  DateTime? _lastBackPress;
 
   @override
   void initState() {
@@ -55,7 +58,25 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        final now = DateTime.now();
+        if (_lastBackPress != null && now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+          SystemNavigator.pop();
+        } else {
+          _lastBackPress = now;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Press back again to exit'),
+              duration: Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+      child: Scaffold(
       key: _scaffoldKey,
       drawer: _buildAdminDrawer(),
       body: _loading
@@ -64,7 +85,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 elevation: 0,
                 title: const Text('VL Garments', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
-              body: const Center(child: CircularProgressIndicator()),
+              body: const VLLoadingIndicator(message: 'INITIALIZING...'),
             )
           : IndexedStack(
               index: _currentTab,
@@ -106,6 +127,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -818,16 +840,16 @@ class _HomeTabState extends State<_HomeTab> {
         Text("Today's Entries", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[800])),
         const SizedBox(height: 12),
 
-        if (catGroups.isEmpty)
+        if (workerEntries.isEmpty)
           _buildEmptyCard('No entries yet', 'Tap + Add Entry to record work for ${worker.name}.'),
 
-        ...catGroups.entries.map((cg) {
-          final rate = widget.dataService.ratePerCategory[cg.key] ?? 0;
-          final amt = rate * cg.value;
-          final itemName = _categoryLabel(cg.key);
+        ...workerEntries.map((entry) {
+          final rate = widget.dataService.ratePerCategory[entry.categoryId] ?? 0;
+          final amt = rate * entry.quantity;
+          final itemName = _categoryLabel(entry.categoryId);
           return Container(
             margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
               color: Colors.white, borderRadius: BorderRadius.circular(12),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
@@ -842,17 +864,351 @@ class _HomeTabState extends State<_HomeTab> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(_titleCase(itemName), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  Text('${cg.value} pcs × ₹${rate.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  const SizedBox(height: 2),
+                  Text('${entry.quantity} pcs × ₹${rate.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text(DateFormat('hh:mm a').format(entry.date), style: TextStyle(fontSize: 11, color: Colors.grey[400])),
                 ]),
               ),
               Text('₹${amt.toStringAsFixed(0)}',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, size: 18, color: Colors.grey[400]),
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                onSelected: (value) {
+                  if (value == 'edit') {
+                    _showEditEntryDialog(entry, worker);
+                  } else if (value == 'delete') {
+                    _confirmDeleteEntry(entry);
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      Icon(Icons.edit_outlined, size: 20, color: Colors.blue[700]),
+                      const SizedBox(width: 12),
+                      const Text('Edit Entry'),
+                    ]),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      Icon(Icons.delete_outline, size: 20, color: Colors.red[700]),
+                      const SizedBox(width: 12),
+                      const Text('Delete Entry', style: TextStyle(color: Colors.red)),
+                    ]),
+                  ),
+                ],
+              ),
             ]),
           );
         }),
 
+        // Category totals summary
+        if (catGroups.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text('Category Totals', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700])),
+          const SizedBox(height: 8),
+          ...catGroups.entries.map((cg) {
+            final rate = widget.dataService.ratePerCategory[cg.key] ?? 0;
+            final amt = rate * cg.value;
+            final itemName = _categoryLabel(cg.key);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4A90E2).withOpacity(0.04),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF4A90E2).withOpacity(0.1)),
+              ),
+              child: Row(children: [
+                Icon(Icons.summarize_rounded, size: 16, color: Colors.grey[500]),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(_titleCase(itemName), style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.grey[700])),
+                ),
+                Text('${cg.value} pcs', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                const SizedBox(width: 12),
+                Text('₹${amt.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
+              ]),
+            );
+          }),
+        ],
+
         const SizedBox(height: 80), // space for FAB
       ],
+    );
+  }
+
+  // ═══════════════════════════════════════
+  //  EDIT ENTRY DIALOG
+  // ═══════════════════════════════════════
+  void _showEditEntryDialog(StitchEntry entry, Worker worker) {
+    final qtyController = TextEditingController(text: entry.quantity.toString());
+    String selectedCategoryId = entry.categoryId;
+    DateTime selectedDate = entry.date;
+
+    final roleId = worker.category?.id ?? '';
+    final filteredCats = widget.dataService.categories
+        .where((c) => c.id.startsWith('${roleId}_'))
+        .toList();
+
+    double calcAmount = (widget.dataService.ratePerCategory[selectedCategoryId] ?? 0) * entry.quantity;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setDlg) {
+          void recalc() {
+            final rate = widget.dataService.ratePerCategory[selectedCategoryId] ?? 0;
+            final qty = int.tryParse(qtyController.text) ?? 0;
+            setDlg(() => calcAmount = rate * qty);
+          }
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.edit, color: Colors.blue),
+              ),
+              const SizedBox(width: 12),
+              const Text('Edit Entry'),
+            ]),
+            content: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                // Worker info
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+                  child: Row(children: [
+                    const Icon(Icons.person, size: 16, color: Colors.grey),
+                    const SizedBox(width: 8),
+                    Text(worker.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                  ]),
+                ),
+                const SizedBox(height: 14),
+
+                // Item Category
+                if (filteredCats.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Item Category *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.category),
+                    ),
+                    value: filteredCats.any((c) => c.id == selectedCategoryId) ? selectedCategoryId : null,
+                    isExpanded: true,
+                    items: filteredCats.map((c) {
+                      final rate = widget.dataService.ratePerCategory[c.id] ?? 0;
+                      final itemName = _categoryLabel(c.id);
+                      return DropdownMenuItem(
+                        value: c.id,
+                        child: Text('${_titleCase(itemName)}  (₹${rate.toStringAsFixed(0)}/pc)'),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      setDlg(() => selectedCategoryId = v ?? selectedCategoryId);
+                      recalc();
+                    },
+                  ),
+                const SizedBox(height: 14),
+
+                // Quantity
+                TextField(
+                  controller: qtyController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Quantity *',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    prefixIcon: const Icon(Icons.numbers),
+                  ),
+                  onChanged: (_) => recalc(),
+                ),
+                const SizedBox(height: 14),
+
+                // Date picker
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now().add(const Duration(days: 1)),
+                    );
+                    if (picked != null) {
+                      setDlg(() => selectedDate = DateTime(
+                        picked.year, picked.month, picked.day,
+                        selectedDate.hour, selectedDate.minute,
+                      ));
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Date',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      prefixIcon: const Icon(Icons.calendar_today),
+                    ),
+                    child: Text(_dateFormat.format(selectedDate)),
+                  ),
+                ),
+
+                // Calculated amount
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF50C878).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF50C878).withOpacity(0.3)),
+                  ),
+                  child: Column(children: [
+                    const Text('Calculated Amount', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 4),
+                    Text('₹${calcAmount.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
+                  ]),
+                ),
+              ]),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              FilledButton.icon(
+                onPressed: () async {
+                  final qty = int.tryParse(qtyController.text.trim());
+                  if (qty == null || qty <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Enter a valid quantity')),
+                    );
+                    return;
+                  }
+                  Navigator.pop(ctx);
+
+                  final updates = <String, dynamic>{
+                    'category': selectedCategoryId,
+                    'quantity': qty,
+                    'date': selectedDate.toIso8601String(),
+                    'worker': worker.id,
+                  };
+
+                  final result = await widget.dataService.updateProductionEntry(entry.id, updates);
+                  if (result != null && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Entry updated successfully'), backgroundColor: Color(0xFF50C878)),
+                    );
+                  } else if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Failed to update entry'), backgroundColor: Colors.red),
+                    );
+                  }
+                  await widget.onRefresh();
+                  if (mounted) setState(() {});
+                },
+                icon: const Icon(Icons.check),
+                label: const Text('Save'),
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  // ═══════════════════════════════════════
+  //  DELETE ENTRY CONFIRMATION
+  // ═══════════════════════════════════════
+  void _confirmDeleteEntry(StitchEntry entry) {
+    final itemName = _titleCase(_categoryLabel(entry.categoryId));
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.warning_amber_rounded, color: Colors.red),
+          ),
+          const SizedBox(width: 12),
+          const Text('Delete Entry?'),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RichText(
+              text: TextSpan(
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
+                children: [
+                  const TextSpan(text: 'Delete '),
+                  TextSpan(
+                    text: '$itemName × ${entry.quantity}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const TextSpan(text: '?'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.2)),
+              ),
+              child: const Row(children: [
+                Icon(Icons.info_outline, size: 16, color: Colors.red),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'This will permanently remove the entry and affect worker earnings.',
+                    style: TextStyle(fontSize: 12, color: Colors.red),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final success = await widget.dataService.deleteProductionEntry(entry.id);
+              if (success && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Entry deleted'), backgroundColor: Color(0xFF50C878)),
+                );
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Failed to delete'), backgroundColor: Colors.red),
+                );
+              }
+              await widget.onRefresh();
+              if (mounted) setState(() {});
+            },
+            icon: const Icon(Icons.delete),
+            label: const Text('Delete'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+          ),
+        ],
+      ),
     );
   }
 

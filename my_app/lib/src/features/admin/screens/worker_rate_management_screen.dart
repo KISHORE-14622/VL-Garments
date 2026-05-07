@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/services/data_service.dart';
+import '../../../core/widgets/vl_loading.dart';
 import '../../../core/models/worker_category.dart';
 import '../../../core/models/product.dart';
 
@@ -63,7 +64,7 @@ class _WorkerRateManagementScreenState extends State<WorkerRateManagementScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: const VLLoadingIndicator(message: 'LOADING DATA...'),
       );
     }
 
@@ -435,7 +436,7 @@ class _CategoryItemRatesScreenState extends State<CategoryItemRatesScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: const VLLoadingIndicator(message: 'LOADING ITEM RATES...'),
       );
     }
 
@@ -724,23 +725,36 @@ class _CategoryItemRatesScreenState extends State<CategoryItemRatesScreen> {
   }
 
   void _showEditRateDialog(String itemName, double currentRate) {
-    final controller = TextEditingController(text: currentRate.toStringAsFixed(2));
+    final nameController = TextEditingController(text: itemName);
+    final rateController = TextEditingController(text: currentRate.toStringAsFixed(2));
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Edit Rate for $itemName'),
+        title: const Text('Edit Item & Rate'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Set rate for ${widget.category.name} working on $itemName:',
+              'Update item details for ${widget.category.name}:',
               style: TextStyle(color: Colors.grey[700]),
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: controller,
+              controller: nameController,
+              decoration: InputDecoration(
+                labelText: 'Item Name',
+                prefixIcon: const Icon(Icons.checkroom),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: rateController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
@@ -752,7 +766,6 @@ class _CategoryItemRatesScreenState extends State<CategoryItemRatesScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              autofocus: true,
             ),
           ],
         ),
@@ -763,29 +776,51 @@ class _CategoryItemRatesScreenState extends State<CategoryItemRatesScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final newRate = double.tryParse(controller.text);
-              if (newRate == null || newRate < 0) {
+              final newName = nameController.text.trim();
+              final newRate = double.tryParse(rateController.text);
+              
+              if (newName.isEmpty || newRate == null || newRate < 0) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a valid rate')),
+                  const SnackBar(content: Text('Please enter valid name and rate')),
                 );
                 return;
               }
+
+              if (newName != itemName && _itemRates.containsKey(newName)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('An item with this name already exists')),
+                );
+                return;
+              }
+
               try {
-                // Use composite key: workerCategoryId_itemName
-                final key = '${widget.category.id}_$itemName';
+                final oldKey = '${widget.category.id}_$itemName';
+                final newKey = '${widget.category.id}_$newName';
+
+                // If name changed, delete the old one first
+                if (newName != itemName) {
+                  await widget.dataService.deleteRate(oldKey);
+                }
+
+                // Upsert new/updated one
                 await widget.dataService.upsertRate(
-                  category: key,
+                  category: newKey,
                   amount: newRate,
                 );
+
                 setState(() {
-                  _itemRates[itemName] = newRate;
+                  if (newName != itemName) {
+                    _itemRates.remove(itemName);
+                  }
+                  _itemRates[newName] = newRate;
                 });
                 widget.onRatesUpdated();
+
                 if (mounted) Navigator.pop(context);
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Rate updated for $itemName'),
+                  const SnackBar(
+                    content: Text('Item updated successfully'),
                     backgroundColor: Colors.green,
                   ),
                 );
@@ -793,7 +828,7 @@ class _CategoryItemRatesScreenState extends State<CategoryItemRatesScreen> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Failed to update rate: $e'),
+                      content: Text('Failed to update item: $e'),
                       backgroundColor: Colors.red,
                     ),
                   );
@@ -821,12 +856,14 @@ class _CategoryItemRatesScreenState extends State<CategoryItemRatesScreen> {
           ElevatedButton(
             onPressed: () async {
               try {
-                // Note: You may need to add a delete endpoint in the backend
-                // For now, we'll just set the rate to 0 or remove from local state
+                final key = '${widget.category.id}_$itemName';
+                await widget.dataService.deleteRate(key);
+                
                 setState(() {
                   _itemRates.remove(itemName);
                 });
                 widget.onRatesUpdated();
+                
                 if (mounted) Navigator.pop(context);
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(

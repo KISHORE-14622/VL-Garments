@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../core/models/inventory.dart';
 import '../../../core/services/data_service.dart';
+import '../../../core/widgets/vl_loading.dart';
 import '../../../core/utils/export_helper.dart';
+import 'inventory_options_screen.dart';
 
 class InventoryScreen extends StatefulWidget {
   final DataService dataService;
@@ -28,6 +30,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
     setState(() => _loading = true);
     try { await widget.dataService.fetchInventory(); } catch (_) {}
     try { await widget.dataService.fetchGstSettings(); } catch (_) {}
+    try { await widget.dataService.fetchSuppliers(); } catch (_) {}
+    try { await widget.dataService.fetchInventoryTypes(); } catch (_) {}
     if (!mounted) return;
     setState(() => _loading = false);
   }
@@ -47,6 +51,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
         elevation: 0,
         actions: [
           IconButton(
+            icon: const Icon(Icons.settings, color: Color(0xFF4A90E2)),
+            tooltip: 'Manage Options',
+            onPressed: () async {
+              await Navigator.push(context, MaterialPageRoute(builder: (_) => InventoryOptionsScreen(dataService: widget.dataService)));
+              _loadInventory();
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.file_download_outlined, color: Color(0xFF4A90E2)),
             tooltip: 'Export to Excel',
             onPressed: () => ExportHelper.exportToExcel(context, widget.dataService, 'inventory'),
@@ -54,7 +66,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const VLLoadingIndicator(message: 'LOADING INVENTORY...')
           : RefreshIndicator(
               onRefresh: _loadInventory,
               child: Column(
@@ -264,154 +276,189 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   void _showAddItemDialog() {
-    final nameCtrl = TextEditingController();
+    String? selectedName;
+    String? selectedSupplier;
     final qtyCtrl = TextEditingController();
     final costCtrl = TextEditingController();
     final cgstCtrl = TextEditingController(text: '${widget.dataService.gstSetting?.cgstPercent ?? 0}');
     final sgstCtrl = TextEditingController(text: '${widget.dataService.gstSetting?.sgstPercent ?? 0}');
-    final supplierCtrl = TextEditingController();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.teal.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.add_shopping_cart, color: Colors.teal),
-          ),
-          const SizedBox(width: 12),
-          const Text('Add Material'),
-        ]),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: nameCtrl, decoration: InputDecoration(labelText: 'Item Name', prefixIcon: const Icon(Icons.label), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-            const SizedBox(height: 12),
-            TextField(controller: supplierCtrl, decoration: InputDecoration(labelText: 'Supplier (optional)', prefixIcon: const Icon(Icons.store), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: InputDecoration(labelText: 'Quantity', prefixIcon: const Icon(Icons.inventory), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-              const SizedBox(width: 12),
-              Expanded(child: TextField(controller: costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))], decoration: InputDecoration(labelText: 'Unit Cost ₹', prefixIcon: const Icon(Icons.currency_rupee), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-            ]),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 4),
-            const Text('GST on Purchase', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: TextField(controller: cgstCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'CGST %', prefixIcon: const Icon(Icons.percent), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-              const SizedBox(width: 12),
-              Expanded(child: TextField(controller: sgstCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'SGST %', prefixIcon: const Icon(Icons.percent), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-            ]),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.teal.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.add_shopping_cart, color: Colors.teal),
+            ),
+            const SizedBox(width: 12),
+            const Text('Add Material'),
           ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text('Add'),
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              final quantity = int.tryParse(qtyCtrl.text);
-              final cost = double.tryParse(costCtrl.text);
-
-              if (name.isNotEmpty && quantity != null && quantity > 0 && cost != null && cost > 0) {
-                Navigator.pop(context);
-                final result = await widget.dataService.addInventoryItem(
-                  name: name,
-                  quantity: quantity,
-                  unitCost: cost,
-                  cgstPercent: double.tryParse(cgstCtrl.text) ?? 0,
-                  sgstPercent: double.tryParse(sgstCtrl.text) ?? 0,
-                  supplier: supplierCtrl.text.trim(),
-                );
-                if (result != null && mounted) {
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$name added to inventory'), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
-                }
-              }
-            },
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              DropdownButtonFormField<String>(
+                value: selectedName,
+                decoration: InputDecoration(labelText: 'Item Name', prefixIcon: const Icon(Icons.label), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                items: widget.dataService.inventoryTypes.map((t) => DropdownMenuItem(value: t.name, child: Text(t.name))).toList(),
+                onChanged: (val) => setDialogState(() => selectedName = val),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedSupplier,
+                decoration: InputDecoration(labelText: 'Supplier (optional)', prefixIcon: const Icon(Icons.store), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('None')),
+                  ...widget.dataService.suppliers.map((s) => DropdownMenuItem(value: s.name, child: Text(s.name)))
+                ],
+                onChanged: (val) => setDialogState(() => selectedSupplier = val),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: InputDecoration(labelText: 'Quantity', prefixIcon: const Icon(Icons.inventory), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+                const SizedBox(width: 12),
+                Expanded(child: TextField(controller: costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))], decoration: InputDecoration(labelText: 'Unit Cost ₹', prefixIcon: const Icon(Icons.currency_rupee), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+              ]),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 4),
+              const Text('GST on Purchase', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: TextField(controller: cgstCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'CGST %', prefixIcon: const Icon(Icons.percent), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+                const SizedBox(width: 12),
+                Expanded(child: TextField(controller: sgstCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'SGST %', prefixIcon: const Icon(Icons.percent), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+              ]),
+            ]),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Add'),
+              onPressed: () async {
+                final name = selectedName ?? '';
+                final quantity = int.tryParse(qtyCtrl.text);
+                final cost = double.tryParse(costCtrl.text);
+
+                if (name.isNotEmpty && quantity != null && quantity > 0 && cost != null && cost > 0) {
+                  Navigator.pop(context);
+                  final result = await widget.dataService.addInventoryItem(
+                    name: name,
+                    quantity: quantity,
+                    unitCost: cost,
+                    cgstPercent: double.tryParse(cgstCtrl.text) ?? 0,
+                    sgstPercent: double.tryParse(sgstCtrl.text) ?? 0,
+                    supplier: selectedSupplier ?? '',
+                  );
+                  if (result != null && mounted) {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$name added to inventory'), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an item and enter valid quantities'), backgroundColor: Colors.red));
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
   void _showEditItemDialog(InventoryItem item) {
-    final nameCtrl = TextEditingController(text: item.name);
+    String? selectedName = widget.dataService.inventoryTypes.any((t) => t.name == item.name) ? item.name : null;
+    String? selectedSupplier = item.supplier.isEmpty ? '' : (widget.dataService.suppliers.any((s) => s.name == item.supplier) ? item.supplier : null);
+    
     final qtyCtrl = TextEditingController(text: item.quantity.toString());
     final costCtrl = TextEditingController(text: item.unitCost.toStringAsFixed(2));
     final cgstCtrl = TextEditingController(text: item.cgstPercent.toString());
     final sgstCtrl = TextEditingController(text: item.sgstPercent.toString());
-    final supplierCtrl = TextEditingController(text: item.supplier);
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: const Icon(Icons.edit, color: Colors.blue),
-          ),
-          const SizedBox(width: 12),
-          const Text('Edit Material'),
-        ]),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextField(controller: nameCtrl, decoration: InputDecoration(labelText: 'Item Name', prefixIcon: const Icon(Icons.label), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-            const SizedBox(height: 12),
-            TextField(controller: supplierCtrl, decoration: InputDecoration(labelText: 'Supplier', prefixIcon: const Icon(Icons.store), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: InputDecoration(labelText: 'Quantity', prefixIcon: const Icon(Icons.inventory), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-              const SizedBox(width: 12),
-              Expanded(child: TextField(controller: costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))], decoration: InputDecoration(labelText: 'Unit Cost ₹', prefixIcon: const Icon(Icons.currency_rupee), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-            ]),
-            const SizedBox(height: 16),
-            const Divider(),
-            const SizedBox(height: 4),
-            const Text('GST on Purchase', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: TextField(controller: cgstCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'CGST %', prefixIcon: const Icon(Icons.percent), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-              const SizedBox(width: 12),
-              Expanded(child: TextField(controller: sgstCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'SGST %', prefixIcon: const Icon(Icons.percent), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
-            ]),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: Colors.blue.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.edit, color: Colors.blue),
+            ),
+            const SizedBox(width: 12),
+            const Text('Edit Material'),
           ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton.icon(
-            icon: const Icon(Icons.save),
-            label: const Text('Save'),
-            onPressed: () async {
-              final name = nameCtrl.text.trim();
-              final quantity = int.tryParse(qtyCtrl.text);
-              final cost = double.tryParse(costCtrl.text);
-
-              if (name.isNotEmpty && quantity != null && quantity > 0 && cost != null && cost > 0) {
-                Navigator.pop(context);
-                final ok = await widget.dataService.updateInventoryItem(
-                  item.id,
-                  name: name,
-                  quantity: quantity,
-                  unitCost: cost,
-                  cgstPercent: double.tryParse(cgstCtrl.text) ?? 0,
-                  sgstPercent: double.tryParse(sgstCtrl.text) ?? 0,
-                  supplier: supplierCtrl.text.trim(),
-                );
-                if (ok && mounted) {
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item updated'), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
-                }
-              }
-            },
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              DropdownButtonFormField<String>(
+                value: selectedName,
+                decoration: InputDecoration(labelText: 'Item Name', prefixIcon: const Icon(Icons.label), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                items: widget.dataService.inventoryTypes.map((t) => DropdownMenuItem(value: t.name, child: Text(t.name))).toList(),
+                onChanged: (val) => setDialogState(() => selectedName = val),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: selectedSupplier,
+                decoration: InputDecoration(labelText: 'Supplier', prefixIcon: const Icon(Icons.store), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
+                items: [
+                  const DropdownMenuItem(value: '', child: Text('None')),
+                  ...widget.dataService.suppliers.map((s) => DropdownMenuItem(value: s.name, child: Text(s.name)))
+                ],
+                onChanged: (val) => setDialogState(() => selectedSupplier = val),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: InputDecoration(labelText: 'Quantity', prefixIcon: const Icon(Icons.inventory), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+                const SizedBox(width: 12),
+                Expanded(child: TextField(controller: costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))], decoration: InputDecoration(labelText: 'Unit Cost ₹', prefixIcon: const Icon(Icons.currency_rupee), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+              ]),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 4),
+              const Text('GST on Purchase', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: TextField(controller: cgstCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'CGST %', prefixIcon: const Icon(Icons.percent), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+                const SizedBox(width: 12),
+                Expanded(child: TextField(controller: sgstCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: 'SGST %', prefixIcon: const Icon(Icons.percent), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+              ]),
+            ]),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton.icon(
+              icon: const Icon(Icons.save),
+              label: const Text('Save'),
+              onPressed: () async {
+                final name = selectedName ?? '';
+                final quantity = int.tryParse(qtyCtrl.text);
+                final cost = double.tryParse(costCtrl.text);
+
+                if (name.isNotEmpty && quantity != null && quantity > 0 && cost != null && cost > 0) {
+                  Navigator.pop(context);
+                  final ok = await widget.dataService.updateInventoryItem(
+                    item.id,
+                    name: name,
+                    quantity: quantity,
+                    unitCost: cost,
+                    cgstPercent: double.tryParse(cgstCtrl.text) ?? 0,
+                    sgstPercent: double.tryParse(sgstCtrl.text) ?? 0,
+                    supplier: selectedSupplier ?? '',
+                  );
+                  if (ok && mounted) {
+                    setState(() {});
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item updated'), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating));
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select an item and enter valid quantities'), backgroundColor: Colors.red));
+                }
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

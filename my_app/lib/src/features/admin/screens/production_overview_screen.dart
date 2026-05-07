@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:math' as math;
 import '../../../core/services/data_service.dart';
+import '../../../core/widgets/vl_loading.dart';
 import '../../../core/models/stitch.dart';
 import '../../../core/models/worker.dart';
 import '../../../core/utils/export_helper.dart';
@@ -72,7 +73,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
           title: const Text('Production Overview'),
           elevation: 0,
         ),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const VLLoadingIndicator(message: 'LOADING DATA...'),
       );
     }
 
@@ -896,6 +897,9 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
 
   Widget _buildEntryCard(StitchEntry entry, String categoryName) {
     final dateFormat = DateFormat('MMM dd, yyyy HH:mm');
+    final rate = widget.dataService.ratePerCategory[entry.categoryId] ?? 0.0;
+    final amount = rate * entry.quantity;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -926,6 +930,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
                     fontSize: 14,
                   ),
                 ),
+                const SizedBox(height: 2),
                 Text(
                   'Worker: ${_workerName(entry.workerId)}',
                   style: TextStyle(
@@ -933,14 +938,30 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
                     fontSize: 12,
                   ),
                 ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      dateFormat.format(entry.date),
+                      style: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 11,
+                      ),
+                    ),
+                    if (amount > 0) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        '₹${amount.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          color: Colors.green[700],
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
-            ),
-          ),
-          Text(
-            dateFormat.format(entry.date),
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 11,
             ),
           ),
         ],

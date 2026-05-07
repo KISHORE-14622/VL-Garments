@@ -40,6 +40,8 @@ async function startServer() {
     const { default: attendanceRoutes } = await import('./routes/attendance.js');
     const { default: completedProductionRoutes } = await import('./routes/completedProduction.js');
     const { default: brandRoutes } = await import('./routes/brands.js');
+    const { default: supplierRoutes } = await import('./routes/suppliers.js');
+    const { default: inventoryTypeRoutes } = await import('./routes/inventory-types.js');
     const { default: gstSettingsRoutes } = await import('./routes/gstSettings.js');
     const { default: billingRoutes } = await import('./routes/billing.js');
     const { default: gstSummaryRoutes } = await import('./routes/gstSummary.js');
@@ -75,6 +77,8 @@ async function startServer() {
     app.use('/api/attendance', attendanceRoutes);
     app.use('/api/completed-production', completedProductionRoutes);
     app.use('/api/brands', brandRoutes);
+    app.use('/api/suppliers', supplierRoutes);
+    app.use('/api/inventory-types', inventoryTypeRoutes);
     app.use('/api/gst-settings', gstSettingsRoutes);
     app.use('/api/billing', billingRoutes);
     app.use('/api/gst-summary', gstSummaryRoutes);

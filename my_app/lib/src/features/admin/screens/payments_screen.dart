@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/services/data_service.dart';
+import '../../../core/widgets/vl_loading.dart';
 import '../../../core/services/razorpay_service.dart';
 import '../../../core/models/worker.dart';
 
@@ -168,7 +169,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const VLLoadingIndicator(message: 'LOADING PAYMENTS...')
           : Column(
               children: [
                 // Summary Cards

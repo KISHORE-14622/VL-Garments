@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/services/data_service.dart';
+import '../../../core/widgets/vl_loading.dart';
 import '../../../core/models/gst_setting.dart';
 import '../../../core/models/gst_summary.dart';
 import '../../../core/utils/export_helper.dart';
@@ -308,7 +309,7 @@ class _GstBillingTabState extends State<GstBillingTab> {
   // ═══ BUILD ═══
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const VLLoadingIndicator(message: 'LOADING BILLING...');
 
     final totalTaxable = _bills.fold<double>(0, (s, b) => s + b.taxableAmount);
     final totalGst = _bills.fold<double>(0, (s, b) => s + b.totalGst);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/services/data_service.dart';
+import '../../../core/widgets/vl_loading.dart';
 import '../../../core/models/product.dart';
 
 class RateManagementScreen extends StatefulWidget {
@@ -59,7 +60,7 @@ class _RateManagementScreenState extends State<RateManagementScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: const VLLoadingIndicator(message: 'LOADING RATES...'),
       );
     }
     return Scaffold(

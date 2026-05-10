@@ -853,7 +853,7 @@ class _WorkersScreenState extends State<WorkersScreen> {
                         child: Column(
                           children: [
                             Text(
-                              '₹${pendingAmount.toStringAsFixed(0)}',
+                              '₹${pendingAmount.toStringAsFixed(2)}',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -1525,7 +1525,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     Expanded(
                       child: _buildFinancialCard(
                         'Total Earned',
-                        '₹${totalEarned.toStringAsFixed(0)}',
+                        '₹${totalEarned.toStringAsFixed(2)}',
                         Colors.blue,
                         Icons.trending_up,
                       ),
@@ -1534,7 +1534,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     Expanded(
                       child: _buildFinancialCard(
                         'Total Paid',
-                        '₹${totalPaid.toStringAsFixed(0)}',
+                        '₹${totalPaid.toStringAsFixed(2)}',
                         Colors.green,
                         Icons.check_circle,
                       ),
@@ -1547,7 +1547,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                     Expanded(
                       child: _buildFinancialCard(
                         'Pending',
-                        '₹${pendingAmount.toStringAsFixed(0)}',
+                        '₹${pendingAmount.toStringAsFixed(2)}',
                         Colors.orange,
                         Icons.pending_actions,
                       ),
@@ -1642,7 +1642,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '$quantity × ₹${rate.toStringAsFixed(0)}',
+                                    '$quantity × ₹${rate.toStringAsFixed(2)}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],
@@ -1652,7 +1652,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                               ),
                             ),
                             Text(
-                              '₹${amount.toStringAsFixed(0)}',
+                              '₹${amount.toStringAsFixed(2)}',
                               style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -1733,7 +1733,7 @@ class _WorkerDetailsScreenState extends State<WorkerDetailsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '₹${payment.amount.toStringAsFixed(0)}',
+                                    '₹${payment.amount.toStringAsFixed(2)}',
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,

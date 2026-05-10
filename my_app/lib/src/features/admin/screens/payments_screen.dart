@@ -500,7 +500,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                     Expanded(
                       child: _buildDetailItem(
                         'Pending Amount',
-                        '₹${pendingAmount.toStringAsFixed(0)}',
+                        '₹${pendingAmount.toStringAsFixed(2)}',
                         Icons.pending_actions,
                       ),
                     ),
@@ -598,7 +598,7 @@ class _PaymentsScreenState extends State<PaymentsScreen> {
                                 Text('$quantity × ₹${rate.toStringAsFixed(0)}',
                                     style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                                 const SizedBox(width: 8),
-                                Text('₹${amount.toStringAsFixed(0)}',
+                                Text('₹${amount.toStringAsFixed(2)}',
                                     style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green)),
                               ],
                             ),

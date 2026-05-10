@@ -266,7 +266,7 @@ class _ShopHomeScreenState extends State<ShopHomeScreen> {
                   controller: priceController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                    FilteringTextInputFormatter.allow(RegExp(r'\d*\.?\d{0,2}')),
                   ],
                   decoration: InputDecoration(
                     labelText: 'Price (₹)',

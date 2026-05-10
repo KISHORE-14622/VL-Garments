@@ -319,7 +319,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               Row(children: [
                 Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: InputDecoration(labelText: 'Quantity', prefixIcon: const Icon(Icons.inventory), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
                 const SizedBox(width: 12),
-                Expanded(child: TextField(controller: costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))], decoration: InputDecoration(labelText: 'Unit Cost ₹', prefixIcon: const Icon(Icons.currency_rupee), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+                Expanded(child: TextField(controller: costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'\d*\.?\d{0,2}'))], decoration: InputDecoration(labelText: 'Unit Cost ₹', prefixIcon: const Icon(Icons.currency_rupee), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
               ]),
               const SizedBox(height: 16),
               const Divider(),
@@ -413,7 +413,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               Row(children: [
                 Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: InputDecoration(labelText: 'Quantity', prefixIcon: const Icon(Icons.inventory), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
                 const SizedBox(width: 12),
-                Expanded(child: TextField(controller: costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))], decoration: InputDecoration(labelText: 'Unit Cost ₹', prefixIcon: const Icon(Icons.currency_rupee), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
+                Expanded(child: TextField(controller: costCtrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'\d*\.?\d{0,2}'))], decoration: InputDecoration(labelText: 'Unit Cost ₹', prefixIcon: const Icon(Icons.currency_rupee), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))))),
               ]),
               const SizedBox(height: 16),
               const Divider(),

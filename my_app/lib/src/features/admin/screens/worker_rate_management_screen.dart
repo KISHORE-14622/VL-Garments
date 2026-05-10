@@ -649,7 +649,7 @@ class _CategoryItemRatesScreenState extends State<CategoryItemRatesScreen> {
               controller: rateController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                FilteringTextInputFormatter.allow(RegExp(r'\d*\.?\d{0,2}')),
               ],
               decoration: InputDecoration(
                 labelText: 'Rate (₹)',
@@ -757,7 +757,7 @@ class _CategoryItemRatesScreenState extends State<CategoryItemRatesScreen> {
               controller: rateController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                FilteringTextInputFormatter.allow(RegExp(r'\d*\.?\d{0,2}')),
               ],
               decoration: InputDecoration(
                 labelText: 'Rate (₹)',

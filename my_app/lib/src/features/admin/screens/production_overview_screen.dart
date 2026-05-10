@@ -173,7 +173,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
               const SizedBox(height: 12),
               _buildStatCard(
                 'Total Value',
-                '₹${totalValue.toStringAsFixed(0)}',
+                '₹${totalValue.toStringAsFixed(2)}',
                 Icons.currency_rupee,
                 Colors.purple,
                 fullWidth: true,
@@ -951,7 +951,7 @@ class _ProductionOverviewScreenState extends State<ProductionOverviewScreen> {
                     if (amount > 0) ...[
                       const SizedBox(width: 8),
                       Text(
-                        '₹${amount.toStringAsFixed(0)}',
+                        '₹${amount.toStringAsFixed(2)}',
                         style: TextStyle(
                           color: Colors.green[700],
                           fontSize: 11,

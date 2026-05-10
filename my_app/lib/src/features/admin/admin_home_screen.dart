@@ -407,7 +407,7 @@ class _HomeTabState extends State<_HomeTab> {
                       final itemName = _categoryLabel(c.id);
                       return DropdownMenuItem(
                         value: c.id,
-                        child: Text('${_titleCase(itemName)}  (₹${rate.toStringAsFixed(0)}/pc)'),
+                        child: Text('${_titleCase(itemName)}  (₹${rate.toStringAsFixed(2)}/pc)'),
                       );
                     }).toList(),
                     onChanged: (v) {
@@ -463,10 +463,10 @@ class _HomeTabState extends State<_HomeTab> {
                     child: Column(children: [
                       const Text('Calculated Amount', style: TextStyle(fontSize: 12, color: Colors.grey)),
                       const SizedBox(height: 4),
-                      Text('₹${calcAmount.toStringAsFixed(0)}',
+                      Text('₹${calcAmount.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
                       Text(
-                        '${qtyController.text} × ₹${(widget.dataService.ratePerCategory[selectedCategory] ?? 0).toStringAsFixed(0)}',
+                        '${qtyController.text} × ₹${(widget.dataService.ratePerCategory[selectedCategory] ?? 0).toStringAsFixed(2)}',
                         style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ]),
@@ -610,7 +610,7 @@ class _HomeTabState extends State<_HomeTab> {
           const SizedBox(width: 10),
           Expanded(child: _summaryCard(Icons.inventory_2_rounded, totalUnits.toString(), 'Day Units', const Color(0xFF50C878))),
           const SizedBox(width: 10),
-          Expanded(child: _summaryCard(Icons.currency_rupee_rounded, '₹${totalEarned.toStringAsFixed(0)}', 'Day Earned', const Color(0xFF9B59B6))),
+          Expanded(child: _summaryCard(Icons.currency_rupee_rounded, '₹${totalEarned.toStringAsFixed(2)}', 'Day Earned', const Color(0xFF9B59B6))),
         ]),
         const SizedBox(height: 20),
         Text('Select a Role', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[800])),
@@ -672,7 +672,7 @@ class _HomeTabState extends State<_HomeTab> {
             if (dayUnits > 0) ...[
               Text('$dayUnits units', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
               const SizedBox(height: 2),
-              Text('₹${dayEarned.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              Text('₹${dayEarned.toStringAsFixed(2)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             ] else
               Text('No entries', style: TextStyle(fontSize: 12, color: Colors.grey[400])),
           ]),
@@ -710,7 +710,7 @@ class _HomeTabState extends State<_HomeTab> {
           const SizedBox(width: 10),
           Expanded(child: _summaryCard(Icons.inventory_2_rounded, roleUnits.toString(), 'Day Units', const Color(0xFF50C878))),
           const SizedBox(width: 10),
-          Expanded(child: _summaryCard(Icons.currency_rupee_rounded, '₹${roleEarned.toStringAsFixed(0)}', 'Day Earned', const Color(0xFF9B59B6))),
+          Expanded(child: _summaryCard(Icons.currency_rupee_rounded, '₹${roleEarned.toStringAsFixed(2)}', 'Day Earned', const Color(0xFF9B59B6))),
         ]),
         const SizedBox(height: 20),
         Text('Workers', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[800])),
@@ -757,7 +757,7 @@ class _HomeTabState extends State<_HomeTab> {
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             if (dayUnits > 0) ...[
-              Text('₹${dayEarned.toStringAsFixed(0)}',
+              Text('₹${dayEarned.toStringAsFixed(2)}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
               Text('$dayUnits units', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
             ] else
@@ -825,9 +825,9 @@ class _HomeTabState extends State<_HomeTab> {
             ]),
             const SizedBox(height: 14),
             Row(children: [
-              Expanded(child: _miniStat('Total Earned', '₹${totalEarned.toStringAsFixed(0)}', const Color(0xFF9B59B6))),
-              Expanded(child: _miniStat('Total Paid', '₹${totalPaid.toStringAsFixed(0)}', const Color(0xFF50C878))),
-              Expanded(child: _miniStat('Pending', '₹${pending.toStringAsFixed(0)}', pending > 0 ? const Color(0xFFFF9500) : Colors.grey)),
+              Expanded(child: _miniStat('Total Earned', '₹${totalEarned.toStringAsFixed(2)}', const Color(0xFF9B59B6))),
+              Expanded(child: _miniStat('Total Paid', '₹${totalPaid.toStringAsFixed(2)}', const Color(0xFF50C878))),
+              Expanded(child: _miniStat('Pending', '₹${pending.toStringAsFixed(2)}', pending > 0 ? const Color(0xFFFF9500) : Colors.grey)),
             ]),
           ]),
         ),
@@ -837,7 +837,7 @@ class _HomeTabState extends State<_HomeTab> {
         Row(children: [
           Expanded(child: _summaryCard(Icons.inventory_2_rounded, wUnits.toString(), 'Day Units', const Color(0xFF50C878))),
           const SizedBox(width: 10),
-          Expanded(child: _summaryCard(Icons.currency_rupee_rounded, '₹${wEarned.toStringAsFixed(0)}', 'Day Earned', const Color(0xFF9B59B6))),
+          Expanded(child: _summaryCard(Icons.currency_rupee_rounded, '₹${wEarned.toStringAsFixed(2)}', 'Day Earned', const Color(0xFF9B59B6))),
         ]),
         const SizedBox(height: 20),
 
@@ -869,11 +869,11 @@ class _HomeTabState extends State<_HomeTab> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(_titleCase(itemName), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 2),
-                  Text('${entry.quantity} pcs × ₹${rate.toStringAsFixed(0)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text('${entry.quantity} pcs × ₹${rate.toStringAsFixed(2)}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                   Text(DateFormat('hh:mm a').format(entry.date), style: TextStyle(fontSize: 11, color: Colors.grey[400])),
                 ]),
               ),
-              Text('₹${amt.toStringAsFixed(0)}',
+              Text('₹${amt.toStringAsFixed(2)}',
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
               const SizedBox(width: 4),
               PopupMenuButton<String>(
@@ -936,7 +936,7 @@ class _HomeTabState extends State<_HomeTab> {
                 ),
                 Text('${cg.value} pcs', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                 const SizedBox(width: 12),
-                Text('₹${amt.toStringAsFixed(0)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
+                Text('₹${amt.toStringAsFixed(2)}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
               ]),
             );
           }),
@@ -1015,7 +1015,7 @@ class _HomeTabState extends State<_HomeTab> {
                       final itemName = _categoryLabel(c.id);
                       return DropdownMenuItem(
                         value: c.id,
-                        child: Text('${_titleCase(itemName)}  (₹${rate.toStringAsFixed(0)}/pc)'),
+                        child: Text('${_titleCase(itemName)}  (₹${rate.toStringAsFixed(2)}/pc)'),
                       );
                     }).toList(),
                     onChanged: (v) {
@@ -1077,7 +1077,7 @@ class _HomeTabState extends State<_HomeTab> {
                   child: Column(children: [
                     const Text('Calculated Amount', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     const SizedBox(height: 4),
-                    Text('₹${calcAmount.toStringAsFixed(0)}',
+                    Text('₹${calcAmount.toStringAsFixed(2)}',
                         style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF50C878))),
                   ]),
                 ),

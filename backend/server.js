@@ -51,7 +51,18 @@ async function startServer() {
 
     const app = express();
 
-    // CORS - allow all origins (Flutter web + APK + Render frontend)
+    // CORS - Bulletproof: manual headers first as safety net, then cors() package
+    app.use((req, res, next) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+      res.setHeader('Access-Control-Max-Age', '86400'); // Cache preflight 24h
+      if (req.method === 'OPTIONS') {
+        return res.status(200).end(); // Kill preflight immediately
+      }
+      next();
+    });
+
     const corsOptions = {
       origin: '*',
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -59,7 +70,7 @@ async function startServer() {
       credentials: false,
     };
     app.use(cors(corsOptions));
-    app.options('*', cors(corsOptions)); // Handle preflight for all routes
+    app.options('*', cors(corsOptions));
 
     app.use(express.json());
     app.use(morgan('dev'));

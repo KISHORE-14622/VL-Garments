@@ -12,8 +12,8 @@ RUN npm ci --only=production
 # Copy all source code
 COPY . .
 
-# Expose the port your app runs on
-EXPOSE 5000
+# Cloud Run sets PORT env var automatically (default 8080)
+EXPOSE 8080
 
 # Start the application
 CMD ["node", "server.js"]
